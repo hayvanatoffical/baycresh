@@ -2,7 +2,7 @@
 
 **Tasarım baz çizgisi:** 3.0 · 24 Eylül 2026  
 **Dokümantasyon düzeni:** 26 Eylül 2026  
-**Üretim durumu:** K0 kaynak paketi `K0-market-0.3.0` olarak son kaynak denetiminden geçirildi: ilk sahiplik, görünür talep/stok kararı, açıklanabilir pazarlık, seviye 2, kasiyer/maaş, kontrollü 20 dakikalık ölçüm ve mobil teklif düzeni kaynakta mevcut. Sunucu tarafı karar doğrulaması ve aynı-sürüm çift runtime kilidi güçlendirildi. Bu kaynak değişikliği Studio place'ine otomatik uygulanmış veya oyuncu/Android testinden geçmiş sayılmaz.
+**Üretim durumu:** K0 kaynak paketi `K0-market-0.4.0`. K0.3 bağımsız olarak denetlendi; iki oyun-durduran hata (raf kilidi ve kayıt çıkmazı) ölçülerek kanıtlandı ve giderildi, tohumlu testin karşılaştırılabilirliği gerçekten sağlandı, RemoteEvent hız sınırı eklendi. İlk sahiplik, görünür talep/stok kararı, açıklanabilir pazarlık, seviye 2, kasiyer/maaş, kontrollü 20 dakikalık ölçüm ve mobil teklif düzeni kaynakta mevcut. Doğrulama iki bağımsız katmanla yapıldı: statik paket denetimi ve 20 senaryoluk ekonomi simülasyonu — ikisi de geçti. **Bu kaynak Studio place'ine uygulanmadı, Android'de ölçülmedi ve oyuncu testinden geçmedi.** Ayrıntı: [PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md](PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md).
 
 Baycrest, Verania'da geçen çok oyunculu bir şehir hayatı oyunudur. Ürün kararı, uygulanmış özellik ve üretim taslağı birbirinden ayrı tutulur. Bugünkü belgeler geliştirmeyi yönlendirir; oyunun çalıştığına dair kanıt değildir.
 

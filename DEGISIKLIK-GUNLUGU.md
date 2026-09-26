@@ -1,5 +1,23 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 26 Eylül 2026 — K0.4 prototip sertleştirmesi
+
+K0.3 kaynak paketi bağımsız olarak denetlendi. **İki oyun-durduran hata** bulundu, ölçülerek kanıtlandı ve giderildi. Yeni oyun özelliği eklenmedi; K0 kapsamı büyütülmedi. Ayrıntı: [`PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md`](PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md).
+
+- **Raf kilidi giderildi (kritik).** Her iki üründe `WholesaleBundle == Level1Capacity` olduğu için, tam paket alımı zorunluluğu rafta tek birim kaldığında yenilemeyi matematiksel olarak imkânsız kılıyordu; oyuncu elindeki son birimi satana kadar müşterileri karşılayamıyordu. Artık rafa sığan kadar, aynı birim fiyatından alım yapılıyor (portakal 6 ₡/kg, ekmek 8 ₡/adet). Ölçülen etki (1200s, aynı seed): satış 16 → 55, kaçan satış 12 → 0.
+- **Kayıt çıkmazı giderildi (kritik).** Kayıt süresi bitip kasa 70 ₡'nin altına düştüğünde ticaret duruyor, dolayısıyla gelir elde etmenin hiçbir yolu kalmıyordu: kalıcı kilit. Simülasyonda altı oyuncu politikasının üçü t=1328s'de kilitlendi. Artık kayıt borcu varken toptancı geri alım moduna geçiyor (etiketin %50'si) ve oyuncu zararına satıp devam edebiliyor; parası ve stoğu bitmişse oturum başına bir kez kayıt mevcut kasayla yenileniyor. Kurtarma olayı `K0RescueGrants` telemetrisine ve sunucu Output'una yazılıyor. 2400s ölçümünde kilitlenen politika sayısı 3/6 → 0/6.
+- **Tohumlu test karşılaştırılabilirliği gerçekten sağlandı.** `PlaytestSeed` "üç testçi karşılaştırılabilir koşullarda oynar" iddiasını taşıyordu ama kaynak bunu vermiyordu: müşteri döngüsü ticaret kapalıyken de akıştan çekim yapıyor, `pickOffer` içindeki bir zar yalnız stok boşken atılıyordu. İkisi de kapatıldı. Artık hızı farklı iki testçi **aynı müşteri türü ve aynı bütçe sinyali dizisiyle** karşılaşıyor. İstenen ürün hâlâ stok durumuna bağlı — bu tasarım gereğidir ve [`K0.4_KNOWN_LIMITATIONS.md`](PRODUCTION/K0.4_KNOWN_LIMITATIONS.md) §5'te kayıtlı.
+- **RemoteEvent sertleştirildi.** `K0MarketDecision` sahiplik, mesafe, tip ve kimlik doğruluyordu ama sınırsız trafik kabul ediyordu; Roblox'un resmî güvenlik rehberi doğrulama ile hız sınırlamasını birlikte birincil savunma sayıyor. Oyuncu başına jeton kovası eklendi (3 saniyede 6 karar). NaN ve ondalık teklif kimlikleri de reddediliyor.
+- **Müşteri ayrıldıktan sonra tezgâhta kalan eski sipariş metni temizleniyor.**
+- **Araştırıldı, hata değil.** `os.clock()` standart Lua'da CPU zamanıdır ama Luau resmî dokümantasyonu bunu "süre ölçümü için yüksek çözünürlüklü zaman damgası" olarak tanımlıyor; mevcut kullanım doğru, değişiklik yapılmadı. Kasiyerin "otomatik kazanma düğmesi" olup olmadığı ölçüldü: 2400s'de kasiyerli işletme sonucu 897 ₡, kasiyersiz 1257 ₡ — kasiyer net getiriyi düşürüyor, gerçek bir yatırım kararı. Değişiklik yapılmadı.
+- **Ertelendi.** Pazarlıkta tek bir yuvarlama deliği: etiket 16 ₡ olduğunda `round(16×0.90) = round(16×0.86)`, yani SIKI bütçeli müşteri de karşı teklifi kabul ediyor. Diğer dokuz fiyatta SIKI %90 oranında reddediyor. Düzeltmek ekonomi oranı değiştirmeyi gerektirir; `KARARLAR.md` kararı olmadan yapılmadı.
+- **Çift doğrulama kuruldu.** `TOOLS/validate_package.py` genişletildi: ürün değişmezleri, attribute üretici/tüketici eşleşmesi, RemoteEvent eylem eşleşmesi, config alan tüketimi, özet format/argüman sayısı ve **gerçek Luau derleyicisiyle** sözdizimi kontrolü. K0.3'ün raf kilidi deseni kaynağa dönerse doğrulayıcı hata veriyor. `TOOLS/simulate_k0.py` (ekonomi modeli) ve `TOOLS/scenarios_k0.py` (20 zorunlu senaryo, GIVEN/WHEN/THEN/FAILURE MODE) eklendi. Sonuç: statik PASS, senaryo 20/20 PASS.
+- **`ASSET-PROMPTS/` eklendi (12 dosya).** Sonraki AI oturumlarına verilecek 3D, animasyon, müzik, SFX, UI ve malzeme promptları; varlık kabul listesi ve provenance şablonu. Bu oturumda **hiçbir varlık üretilmedi**. Seslendirme K0 için gerekçesiyle **önerilmiyor**.
+- **Lisans doğrulaması.** Suno resmî Terms: ücretsiz plan yalnız "personal and non-commercial", ücretli planda haklar kullanıcıya devrediliyor, ancak her iki planda da telifin oluşacağı garanti edilmiyor. Meshy resmî şartları: ücretsiz plan çıktısı CC BY 4.0, **atıf zorunlu**; ücretli planda atıf gerekmiyor. Udio ve seçilmemiş araçlar `UNKNOWN / REVIEW REQUIRED` — kullanılamaz.
+- **Durum:** `SOURCE VERIFIED` · `STATIC VERIFIED` · `SCENARIO VERIFIED` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Bu sürüm Studio'da çalıştırılmadı, Android'de ölçülmedi, oyuncu testinden geçmedi. Plan: [`PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](PRODUCTION/K0.4_NEXT_TEST_PLAN.md).
+
+---
+
 ## 26 Eylül 2026 — K0.3 final kaynak denetimi
 
 - Aktif K0 kaynak sürümü `K0-market-0.3.0` olarak sabitlendi; gameplay RNG her test sahibi için aynı seed ile yeniden başlıyor, dekoratif RNG ayrıldı.

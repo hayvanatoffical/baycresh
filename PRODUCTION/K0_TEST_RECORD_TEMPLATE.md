@@ -1,6 +1,6 @@
 # K0 test kaydı — doldurulacak şablon
 
-**Kaynak hedefi:** `K0-market-0.3.0`  
+**Kaynak hedefi:** `K0-market-0.4.0`  
 **Durum:** Şablon; yapılmış test veya oyuncu sonucu içermez. Her test sürümü için ayrı kopya oluşturulur. Kapı kararı `EKIP/07-YOL-HARITASI.md` §2'ye dayanır.
 
 > K0.3 kontrollü oynanış RNG seed'i kullanır ve her test sahibi atandığında aynı ekonomi dizisini baştan başlatır. Dekoratif kalabalık RNG'si ayrıdır. Katılımcıya 20 dakikalık geri sayım gösterilmez; süre dolduğunda oyun durmaz. Böylece “süre bitince kendiliğinden devam” davranışı daha az yönlendirilir.
@@ -8,7 +8,7 @@
 | Alan | Kayıt |
 |---|---|
 | Build / place adı ve ID | TBD |
-| Kaynak sürümü / commit | `K0-market-0.3.0` / TBD |
+| Kaynak sürümü / commit | `K0-market-0.4.0` / TBD |
 | Test tarihi ve saat dilimi | TBD |
 | Test edilen değişiklikler | TBD |
 | Cihaz / giriş yöntemi | TBD |
@@ -66,6 +66,10 @@ Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özell
 - Owner ayrılışı → yeni owner devri / hata yok: **ölçülmedi** — kanıt yeri:
 - 20. dakikada `[Baycrest K0] summary reason=target_20m ...`: **ölçülmedi** — kanıt yeri:
 - Konsol hata/warn kaydı: **ölçülmedi** — kanıt yeri:
+- **K0.4 · raf yenileme:** rafta 1 birim kalınca toptancıdan alım yapılabildi mi (kısmi alım bildirimi): **ölçülmedi** — kanıt yeri:
+- **K0.4 · tasfiye:** kayıt borcu varken toptancı `Tasfiye et` moduna geçti mi: **ölçülmedi** — kanıt yeri:
+- **K0.4 · `liquidations=` sayacı:** özet satırından değer: **ölçülmedi**
+- **K0.4 · `rescueGrants=` sayacı:** özet satırından değer: **ölçülmedi** — *sıfırdan büyükse bu oturum ekonomi dengesi açısından şüphelidir, sebebi yazılır:*
 - Android FPS / bellek / dokunmatik: **ölçülmedi** — cihaz ve sahne:
 - Veri kaydı/geri dönüş: **K1 kapsamı; K0'da beklenmez**.
 

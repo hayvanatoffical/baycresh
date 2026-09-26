@@ -1,4 +1,4 @@
--- Baycrest K0 Market HUD 0.3
+-- Baycrest K0 Market HUD 0.4
 -- Read-only state presentation. All economic decisions are validated by the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -255,7 +255,13 @@ local function render()
         helpText.Text = "Sahiplik sende. Satış açmak için soldaki yönetim panosunda kaydı tamamla."
     elseif permitDue then
         goalLabel.Text = "Pazar kaydı bitti; ticaret geçici olarak durdu."
-        helpText.Text = "Pazar Yönetimi'nde " .. C.PermitFee .. " ₡ yenile. Tezgâh ve stok sende kalır; yalnız ticaret bekler."
+        if cash >= C.PermitFee then
+            helpText.Text = "Pazar Yönetimi'nde " .. C.PermitFee .. " ₡ yenile. Tezgâh ve stok sende kalır; yalnız ticaret bekler."
+        elseif orange + bread > 0 then
+            helpText.Text = "Kasan " .. C.PermitFee .. " ₡ kaydı karşılamıyor. Toptancıda stoğunu zararına tasfiye edip kaydı yenileyebilirsin: bu bir karar, çıkmaz değil."
+        else
+            helpText.Text = "Kasan yetmiyor ve tasfiye edilecek stok yok. Pazar Yönetimi bu oturumda bir kez kurtarma yenilemesi yapar; gözlemci bunu kayda geçirsin."
+        end
     elseif orange + bread == 0 then
         goalLabel.Text = "3 / Talebe göre ilk stok kararını ver."
         helpText.Text = C.Products.orange.Name .. " " .. C.Products.orange.WholesaleBundle .. " " .. C.Products.orange.Unit .. " / " .. C.Products.orange.WholesaleCost .. " ₡, " .. C.Products.bread.Name .. " " .. C.Products.bread.WholesaleBundle .. " " .. C.Products.bread.Unit .. " / " .. C.Products.bread.WholesaleCost .. " ₡. Üstteki talep göstergesi hangi ürünün daha yüksek fiyata gittiğini söyler."
@@ -316,6 +322,7 @@ local attributes = {
     "K0OfferOpen", "K0OfferId", "K0OfferSKU", "K0OfferUnits", "K0OfferAsk", "K0OfferBid",
     "K0OfferCounter", "K0OfferType", "K0OfferSignal", "K0NoticeSerial", "K0SessionSeconds",
     "K0TargetSessionSeconds", "K0SessionTargetReached",
+    "K0Liquidations", "K0LiquidationRevenue", "K0RescueGrants",
 }
 for _, name in ipairs(attributes) do player:GetAttributeChangedSignal(name):Connect(render) end
 render()

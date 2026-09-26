@@ -1,8 +1,8 @@
 # Baycrest K0 — Roblox Studio prototip kaynakları
 
-**Kaynak sürümü:** `K0-market-0.3.0` · 26 Eylül 2026  
+**Kaynak sürümü:** `K0-market-0.4.0` · 26 Eylül 2026  
 **Studio hedefi:** place ID `83986068176961`, `Workspace/BlackstoneBazaar_K0`  
-**Durum:** Kaynak paketi yeniden yapılandırıldı. Bu ZIP'in üretilmesi Studio place'inin otomatik olarak güncellendiği veya oyuncu testinin geçtiği anlamına gelmez.
+**Durum:** K0.3 denetlendi; iki oyun-durduran hata giderildi. Bu ZIP'in üretilmesi Studio place'inin otomatik olarak güncellendiği veya oyuncu testinin geçtiği anlamına gelmez.
 
 K0'ın tek sorusu: **“Oyuncu ilk dakikalarda bir şeye sahip olup, görünür kararlarla büyütmek istiyor mu?”** Polis, suç, silah, kalıcı veri ve büyük şehir bu prototipin kapsamı değildir.
 
@@ -33,7 +33,9 @@ Eski `K0Game`, `K0HUD` ve `K0Config` kaynakları çifte runtime ve aynı Attribu
 4. Talep yaklaşık 60 saniyede bir değişir; talep gören ürünün dünya fiyat etiketi ve teklif fiyatı `%15` artar.
 5. Normal alıcı etiketi kabul eder. Pazarlıkçıda oyuncu düşük garantili teklifi kabul eder, bütçe sinyaline göre daha yüksek karşı teklif verir veya satışı reddeder.
 6. 250 ₡ prototip maliyetiyle seviye 2 kapasitesi açılır. Sonra 60 ₡ yatırım ile kasiyer alınabilir; maaş işletme gideridir.
-7. K0.3 testinde pazar kaydı 22 dakika sürer; 20 dakikalık kapı ölçümünü bölmez. Oyuncu testten sonra devam ederse süre sonunda sahiplik/stok silinmeden **ticaret askıya alınır** ve yenilemeyle devam eder.
+7. K0 testinde pazar kaydı 22 dakika sürer; 20 dakikalık kapı ölçümünü bölmez. Oyuncu testten sonra devam ederse süre sonunda sahiplik/stok silinmeden **ticaret askıya alınır** ve yenilemeyle devam eder.
+8. **K0.4:** stok yenileme artık tam paket zorunluluğu taşımıyor; rafa sığan kadar, aynı birim fiyatından alınıyor (portakal 6 ₡/kg, ekmek 8 ₡/adet).
+9. **K0.4:** kayıt borcu varken toptancı tezgâhları kapanmıyor, **geri alım** moduna geçiyor. Oyuncu stoğunu etiketin %50'sine tasfiye edip kaydı yenileyebiliyor. Parası ve stoğu bitmişse oturum başına **bir kez** kayıt mevcut kasayla yenileniyor ve bu olay telemetriye yazılıyor.
 
 Bu akıştaki `70 / 250 / 60 / 45 ₡`, `%15` ve sıkıştırılmış süreler **K0 playtest değeridir**. `K0MarketConfig.Production` altında tutulan kanonik ekonomi değerlerinin yerine geçmez.
 
@@ -58,6 +60,16 @@ Bu akıştaki `70 / 250 / 60 / 45 ₡`, `%15` ve sıkıştırılmış süreler *
 - Mobil dar ekranda pazarlık düğmeleri tek satırda küçülmek yerine dikey ve daha büyük dokunma hedeflerine dönüşür.
 - HUD ve dünya panolarındaki prototip ücretleri mümkün olduğunca `K0MarketConfig` üzerinden okunur; sayı sürüklenmesi azaltılır.
 
+## K0.4'te giderilen kod zayıflıkları
+
+- **Raf kilidi.** `WholesaleBundle == Level1Capacity` olduğu için, tam paket alımı zorunluluğu rafta tek birim kaldığında yenilemeyi imkânsız kılıyordu. Ölçüldü: 20 dakikada 12 kaçan satış, oyuncu dakikalarca hiçbir müşteriyi karşılayamıyor. Artık rafa sığan kadar alınıyor; aynı ölçümde kaçan satış 0'a indi.
+- **Kayıt çıkmazı.** Kayıt bitip kasa yetersiz kalınca ticaret duruyor ve gelir yolu kalmıyordu: kalıcı kilit. Simülasyonda altı politikanın üçü t=1328s'de kilitlendi. Tasfiye çıkışı ve sınırlı kurtarma eklendi; kilit 0'a indi.
+- **Tohumlu akış sapması.** Müşteri döngüsü ticaret kapalıyken de RNG'den çekim yapıyordu; ayrıca `pickOffer` içindeki bir zar yalnız stok boşken atılıyordu. İkisi de kapatıldı; hızı farklı testçiler artık aynı müşteri ve bütçe sinyali dizisini görüyor.
+- **RemoteEvent hız sınırı.** `K0MarketDecision` sınırsız trafik kabul ediyordu. Oyuncu başına jeton kovası eklendi (3 saniyede 6 karar); NaN ve ondalık teklif kimlikleri reddediliyor.
+- **Eski prompt metni.** Müşteri ayrıldıktan sonra tezgâh eski siparişi ilan etmeye devam ediyordu; temizleniyor.
+
+Ayrıntı ve ölçüm tabloları: [`../PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md`](../PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md)
+
 ## Studio'ya geçiş sırası
 
 1. Place'in kopyasını alın.
@@ -65,7 +77,8 @@ Bu akıştaki `70 / 250 / 60 / 45 ₡`, `%15` ve sıkıştırılmış süreler *
 3. Yukarıdaki üç aktif kaynağı yerleştirin.
 4. Mevcut sahnede `K0_MARKET_V3_MIGRATION.lua`; temiz sahnede `MARKET_SYSTEM_BUILD.lua` çalıştırın.
 5. Play ile en az şu smoke akışını geçin: sahiplen → kayıt → iki stoktan biri → müşteri teklifi → pazarlık → seviye 2 → kasiyer → maaş. Kayıt yenilemeyi ayrıca doğrulamak isterseniz Edit-mode smoke kopyasında süreyi geçici düşürün; kaydedilen K0.3 değeri 22 dakikadır.
-6. Konsolda tek `Baycrest K0 market server ready K0-market-0.3.0` satırı bulunmalı; eski `Baycrest K0 server ready` runtime'ı çalışmamalı.
+6. Konsolda tek `Baycrest K0 market server ready K0-market-0.4.0` satırı bulunmalı; eski `Baycrest K0 server ready` runtime'ı çalışmamalı.
+6b. **K0.4 kontrolü:** toptancı promptu `ActionText` alanına çalışma zamanında yazıyor ("Stok al" / "Tasfiye et"). Sahne kurucular K0.3 döneminde yazıldığı için ilk kontrol edilecek nokta burasıdır.
 7. Android ve üç bağımsız 20 dakikalık ürün testi yapılmadan `DOĞRULANDI` yazmayın.
 
 ## Bilinen sınırlar

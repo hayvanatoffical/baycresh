@@ -120,6 +120,9 @@ local function resetState()
     state.declineCount = 0
     state.permitRenewals = 0
     state.wagePayments = 0
+    state.liquidations = 0
+    state.liquidationRevenue = 0
+    state.rescueGrants = 0
     state.targetSummaryPrinted = false
     -- A fixed opening condition makes the three K0 playtests comparable.
     state.demandSKU = economyRng:NextInteger(1, 2) == 1 and "orange" or "bread"
@@ -247,8 +250,13 @@ local function updateWorldState()
     local activeCommerce = owner ~= nil and state.claimed and state.permit and not state.permitDue
     claimPrompt.Enabled = owner ~= nil and not state.claimed
     permitPrompt.Enabled = owner ~= nil and state.claimed and (not state.permit or state.permitDue)
-    orangePrompt.Enabled = activeCommerce
-    breadPrompt.Enabled = activeCommerce
+    -- While the registration is lapsed the wholesale desks stay reachable as a
+    -- liquidation route, so the player is never left without an available action.
+    local liquidating = owner ~= nil and state.claimed and state.permitDue
+    orangePrompt.Enabled = activeCommerce or (liquidating and state.stock.orange > 0)
+    breadPrompt.Enabled = activeCommerce or (liquidating and state.stock.bread > 0)
+    orangePrompt.ActionText = liquidating and "Tasfiye et" or "Stok al"
+    breadPrompt.ActionText = liquidating and "Tasfiye et" or "Stok al"
     salePrompt.Enabled = activeCommerce and state.visitorState == "ready"
     upgradePrompt.Enabled = activeCommerce and state.level == 1
     hirePrompt.Enabled = activeCommerce and state.level >= 2 and not state.hired
@@ -324,6 +332,9 @@ local function sync()
         owner:SetAttribute("K0DeclineCount", state.declineCount)
         owner:SetAttribute("K0PermitRenewals", state.permitRenewals)
         owner:SetAttribute("K0WagePayments", state.wagePayments)
+        owner:SetAttribute("K0Liquidations", state.liquidations)
+        owner:SetAttribute("K0LiquidationRevenue", state.liquidationRevenue)
+        owner:SetAttribute("K0RescueGrants", state.rescueGrants)
         owner:SetAttribute("K0TargetSessionSeconds", C.TargetSessionSeconds)
         owner:SetAttribute("K0SessionTargetReached", elapsedSeconds() >= C.TargetSessionSeconds)
 
@@ -529,7 +540,11 @@ local function pickOffer(kind)
         sku = state.demandSKU == "orange" and "bread" or "orange"
     end
     local other = sku == "orange" and "bread" or "orange"
-    if state.stock[sku] == 0 and state.stock[other] > 0 and economyRng:NextNumber() < 0.8 then sku = other end
+    -- Draw unconditionally: K0.3 only rolled this when the shelf happened to be
+    -- empty, so the number of draws per customer depended on the player's stock and
+    -- the seeded sequence diverged between testers. The roll is now always spent.
+    local swapRoll = economyRng:NextNumber()
+    if state.stock[sku] == 0 and state.stock[other] > 0 and swapRoll < 0.8 then sku = other end
 
     local units = sku == "orange" and economyRng:NextInteger(1, 3) or economyRng:NextInteger(1, 2)
     offerSerial += 1
@@ -559,6 +574,9 @@ local function clearVisitor()
     state.offerOpen = false
     state.currentOffer = nil
     state.visitorState = "none"
+    -- K0.3 left the last customer's request on the prompt after they walked off,
+    -- so the stall advertised an order nobody was waiting for.
+    salePrompt.ObjectText = "Tezgâh"
     if visitor then visitor:Destroy(); visitor = nil end
     sync()
 end
@@ -585,50 +603,126 @@ end)
 permitPrompt.Triggered:Connect(function(player)
     if not guard(player, market.PermitOffice) or not state.claimed then return end
     if state.permit and not state.permitDue then return end
-    if state.cash < C.PermitFee then
-        notice("Pazar kaydı için " .. (C.PermitFee - state.cash) .. " ₡ eksik.")
-        return
+
+    local fee = C.PermitFee
+    local rescued = false
+    if state.cash < fee then
+        -- Last-resort guard rail: only when the player cannot pay AND has no stock
+        -- left to liquidate. Bounded per session and written to telemetry so an
+        -- observer sees that the economy needed rescuing instead of it passing
+        -- silently. This is a prototype measurement aid, not a production rule.
+        local canLiquidate = state.stock.orange > 0 or state.stock.bread > 0
+        if canLiquidate then
+            notice("Pazar kaydı için " .. (fee - state.cash) .. " ₡ eksik. Toptancıda stoğunu tasfiye edebilirsin.")
+            return
+        end
+        if state.rescueGrants >= (C.RescueGrantLimit or 1) then
+            notice("Pazar kaydı için " .. (fee - state.cash) .. " ₡ eksik ve tasfiye edilecek stok yok. Bu oturumda kurtarma hakkı kalmadı.")
+            return
+        end
+        state.rescueGrants += 1
+        fee = state.cash
+        rescued = true
     end
+
     local wasRenewal = state.permit and state.permitDue
-    state.cash -= C.PermitFee
-    state.permitSpent += C.PermitFee
+    state.cash -= fee
+    state.permitSpent += fee
     if wasRenewal then state.permitRenewals += 1 end
     state.permit = true
     state.permitDue = false
     state.permitRemaining = C.PermitPeriodSeconds
     sync()
-    notice("Pazar kaydı aktif. Talep panosuna bak ve toptancıdan ilk stok kararını ver.")
+    if rescued then
+        notice("KURTARMA: kasan yetmediği ve tasfiye edilecek stok kalmadığı için kayıt " .. fee .. " ₡ ile yenilendi. Bu bir prototip güvenlik ağıdır; gözlemci bunu kayda geçirsin.")
+        print(string.format("[Baycrest K0] rescue_grant seconds=%d cash=%d", elapsedSeconds(), state.cash))
+    else
+        notice("Pazar kaydı aktif. Talep panosuna bak ve toptancıdan ilk stok kararını ver.")
+    end
 end)
 
+local function unitCost(product)
+    -- Config guarantees WholesaleCost divides evenly by WholesaleBundle.
+    return math.floor(product.WholesaleCost / product.WholesaleBundle)
+end
+
+local function capacityFor(sku)
+    local product = C.Products[sku]
+    return state.level >= 2 and product.Level2Capacity or product.Level1Capacity
+end
+
+-- K0.3 sold whole bundles only. Because Level1Capacity equals one bundle, a shelf
+-- holding a single unsold unit could never be topped up: customers kept asking for
+-- 2-3 units, the player could not buy more, and the loop stalled on lost sales with
+-- no action available. K0.4 buys exactly what fits at the same per-unit price.
 local function restock(player, sku, target)
     if not guard(player, target) or not commerceActive() then
         if player == owner and state.permitDue then notice("Önce Pazar Yönetimi'nde kaydı yenile.") end
         return
     end
     local product = C.Products[sku]
-    local cap = state.level >= 2 and product.Level2Capacity or product.Level1Capacity
-    if state.stock[sku] + product.WholesaleBundle > cap then
-        notice(product.Name .. " için yer yok. Stoku sat veya tezgâhı büyüt.")
+    local room = capacityFor(sku) - state.stock[sku]
+    if room <= 0 then
+        notice(product.Name .. " rafı dolu. Sat veya tezgâhı büyüt.")
         return
     end
-    if state.cash < product.WholesaleCost then
-        notice(product.Name .. " stoğuna " .. (product.WholesaleCost - state.cash) .. " ₡ eksik.")
+    local perUnit = unitCost(product)
+    local units = math.min(product.WholesaleBundle, room)
+    local affordable = math.floor(state.cash / perUnit)
+    if affordable < 1 then
+        notice(product.Name .. " için " .. (perUnit - state.cash) .. " ₡ eksik (birim " .. perUnit .. " ₡).")
         return
     end
-    state.cash -= product.WholesaleCost
-    state.wholesaleSpent += product.WholesaleCost
-    state.stock[sku] += product.WholesaleBundle
+    units = math.min(units, affordable)
+    local cost = units * perUnit
+
+    state.cash -= cost
+    state.wholesaleSpent += cost
+    state.stock[sku] += units
     state.stockPurchases += 1
     if sku == state.demandSKU then state.demandAlignedPurchases += 1 end
     milestone("stock")
     updateDisplays()
     sync()
     local demandNote = sku == state.demandSKU and " Talep yüksek." or ""
-    notice(product.Name .. " +" .. product.WholesaleBundle .. " " .. product.Unit .. " alındı; kasa -" .. product.WholesaleCost .. " ₡." .. demandNote)
+    local partialNote = units < product.WholesaleBundle and " (rafa sığan kadar)" or ""
+    notice(product.Name .. " +" .. units .. " " .. product.Unit .. partialNote .. " alındı; kasa -" .. cost .. " ₡." .. demandNote)
 end
 
-orangePrompt.Triggered:Connect(function(player) restock(player, "orange", market.OrangeWholesale) end)
-breadPrompt.Triggered:Connect(function(player) restock(player, "bread", market.BreadWholesale) end)
+-- K0.4 dead-end exit. With the registration lapsed, commerce is halted: no customer
+-- spawns, no sale is possible. K0.3 therefore had a terminal state — cash below the
+-- renewal fee meant the session could never recover, and the simulated 22-minute run
+-- reproduced it at t=1328s. The wholesaler now buys stock back at a loss while the
+-- registration is lapsed, so the player always has an action and a real decision.
+local function liquidate(player, sku, target)
+    if not guard(player, target) then return end
+    if not (state.claimed and state.permitDue) then return end
+    local product = C.Products[sku]
+    if state.stock[sku] <= 0 then
+        notice(product.Name .. " stoğu yok. Diğer üründen tasfiye et veya kaydı yenile.")
+        return
+    end
+    local perUnit = math.max(1, math.floor(product.Retail * (C.LiquidationRatio or 0.5) + 0.5))
+    state.stock[sku] -= 1
+    state.cash += perUnit
+    state.revenue += perUnit
+    state.liquidations += 1
+    state.liquidationRevenue += perUnit
+    updateDisplays()
+    sync()
+    notice("Tasfiye: 1 " .. product.Unit .. " " .. product.Name .. " toptancıya " .. perUnit .. " ₡ (etiket " .. product.Retail .. " ₡). Kayıt için " .. math.max(0, C.PermitFee - state.cash) .. " ₡ kaldı.")
+end
+
+local function wholesaleTrigger(player, sku, target)
+    if state.permitDue then
+        liquidate(player, sku, target)
+    else
+        restock(player, sku, target)
+    end
+end
+
+orangePrompt.Triggered:Connect(function(player) wholesaleTrigger(player, "orange", market.OrangeWholesale) end)
+breadPrompt.Triggered:Connect(function(player) wholesaleTrigger(player, "bread", market.BreadWholesale) end)
 
 salePrompt.Triggered:Connect(function(player)
     if not guard(player, interaction.SalePoint) or not commerceActive() then return end
@@ -641,9 +735,31 @@ salePrompt.Triggered:Connect(function(player)
     end
 end)
 
+-- Remote traffic is rate limited per player before any state is read. Roblox's
+-- security guidance treats validation and rate limiting as the primary defence;
+-- K0.3 validated owner, range, type and offer id but accepted unlimited traffic.
+local decisionBuckets = {}
+
+local function acceptDecisionCall(player)
+    local now = os.clock()
+    local bucket = decisionBuckets[player]
+    if not bucket or now - bucket.windowStart >= (C.DecisionRateWindow or 3) then
+        decisionBuckets[player] = {windowStart = now, count = 1}
+        return true
+    end
+    if bucket.count >= (C.DecisionRateLimit or 6) then
+        return false
+    end
+    bucket.count += 1
+    return true
+end
+
 decision.OnServerEvent:Connect(function(player, id, action)
+    if not acceptDecisionCall(player) then return end
     if player ~= owner or not commerceActive() or not inRange(player, interaction.SalePoint) then return end
-    if type(id) ~= "number" or type(action) ~= "string" then return end
+    -- Reject NaN/inf and non-integer ids before they reach the offer comparison.
+    if type(id) ~= "number" or id ~= id or id % 1 ~= 0 then return end
+    if type(action) ~= "string" then return end
     if action ~= "accept" and action ~= "counter" and action ~= "decline" then return end
     local offer = state.currentOffer
     if not offer or state.visitorState ~= "ready" or not state.offerOpen or id ~= offer.id then return end
@@ -739,13 +855,14 @@ local function printSessionSummary(reason)
     if not owner then return end
     local seconds = elapsedSeconds()
     print(string.format(
-        "[Baycrest K0] summary reason=%s seconds=%d claim=%d stock=%d offer=%d decision=%d sale=%d upgrade=%d hire=%d sales=%d revenue=%d operatingCost=%d operatingResult=%d lostSales=%d stockPurchases=%d demandAligned=%d accept=%d counter=%d counterSuccess=%d counterFailure=%d decline=%d renewals=%d wagePayments=%d",
+        "[Baycrest K0] summary reason=%s seconds=%d claim=%d stock=%d offer=%d decision=%d sale=%d upgrade=%d hire=%d sales=%d revenue=%d operatingCost=%d operatingResult=%d lostSales=%d stockPurchases=%d demandAligned=%d accept=%d counter=%d counterSuccess=%d counterFailure=%d decline=%d renewals=%d wagePayments=%d liquidations=%d rescueGrants=%d",
         reason, seconds, state.firstClaimSeconds, state.firstStockSeconds, state.firstOfferSeconds, state.firstDecisionSeconds,
         state.firstSaleSeconds, state.firstUpgradeSeconds, state.firstHireSeconds, state.sales, state.revenue,
         state.wholesaleSpent + state.permitSpent + state.wagesSpent,
         state.revenue - (state.wholesaleSpent + state.permitSpent + state.wagesSpent),
         state.lostSales, state.stockPurchases, state.demandAlignedPurchases, state.acceptCount, state.counterCount,
-        state.counterSuccess, state.counterFailure, state.declineCount, state.permitRenewals, state.wagePayments
+        state.counterSuccess, state.counterFailure, state.declineCount, state.permitRenewals, state.wagePayments,
+        state.liquidations, state.rescueGrants
     ))
 end
 
@@ -810,6 +927,7 @@ end
 Players.PlayerAdded:Connect(setupPlayer)
 for _, player in ipairs(Players:GetPlayers()) do setupPlayer(player) end
 Players.PlayerRemoving:Connect(function(player)
+    decisionBuckets[player] = nil
     if player ~= owner then return end
     printSessionSummary("owner_left")
     owner = nil
@@ -891,6 +1009,27 @@ local function waitForSession(seconds, serial)
 end
 
 -- Customer loop. No customer is spawned until ownership, permit and stock-ready commerce are active.
+--
+-- K0.4 draw discipline: the seeded economy stream is touched only when a customer
+-- is genuinely about to be served. K0.3 drew an arrival gap on every iteration of
+-- this loop, including the whole setup phase and every registration pause, so two
+-- testers who reached the same point at different speeds were already reading
+-- different parts of the sequence. The controlled-playtest seed then guaranteed
+-- nothing. Waiting for the gate before and after the gap keeps the customer
+-- sequence identical across testers; only wall-clock timing differs.
+local function gateOpen()
+    return commerceActive()
+        and (state.stock.orange > 0 or state.stock.bread > 0)
+        and not visitor
+end
+
+local function waitForGate(serial)
+    while owner and state.sessionSerial == serial and not gateOpen() do
+        task.wait(0.25)
+    end
+    return owner ~= nil and state.sessionSerial == serial and gateOpen()
+end
+
 task.spawn(function()
     while true do
         if not owner then
@@ -898,15 +1037,17 @@ task.spawn(function()
             continue
         end
         local serial = state.sessionSerial
+        if not waitForGate(serial) then
+            continue
+        end
         local gap = economyRng:NextInteger(C.ArrivalGapMin, C.ArrivalGapMax)
         if not waitForSession(gap, serial) then
             continue
         end
-        -- Do not spawn the first customer before the player has made a stock
-        -- decision. Once either product is stocked, out-of-stock requests for
-        -- the other product may still occur and become readable feedback.
-        local hasAnyStock = state.stock.orange > 0 or state.stock.bread > 0
-        if commerceActive() and hasAnyStock and not visitor then
+        if not waitForGate(serial) then
+            continue
+        end
+        if commerceActive() and not visitor then
             local kind = pickVisitor()
             local entry = points.CustomerEntry.Position
             local queue = points.CustomerQueue.Position
