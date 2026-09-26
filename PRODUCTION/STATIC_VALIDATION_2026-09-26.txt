@@ -1,0 +1,4 @@
+BAYCREST static validator — expected K0-market-0.3.0
+Root: /mnt/data/baycrest_work/BAYCREST
+Active runtime Lua files: 3
+PASS — package topology, current-version invariants, and local Markdown links are consistent.
