@@ -20,6 +20,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "TOOLS" / "luau_harness"
+CONFIG_SOURCE = "GAME/src/ReplicatedStorage/K0MarketConfig.lua"
+
+sys.path.insert(0, str(ROOT / "TOOLS" / "place_build"))
+from smoke_bundle import build_smoke_script, config_expectation  # noqa: E402
 
 SOURCES = {
     "SCENE_BUILD": "GAME/SCENE_BUILD.lua",
@@ -57,8 +61,12 @@ def find_luau() -> str | None:
     return None
 
 
-def build_bundle(only: list[str], signal_modes: list[str], echo: bool) -> str:
+def build_bundle(only: list[str], signal_modes: list[str], echo: bool, dump_scene: bool = False) -> str:
     parts = ["--!nocheck", "local SOURCES = {}"]
+    # H17 runs the exact Open Cloud smoke task script that roblox_cloud.py sends.
+    config_text = (ROOT / CONFIG_SOURCE).read_text(encoding="utf-8")
+    smoke = build_smoke_script({**config_expectation(config_text), "profile": None})
+    parts.append(f"SOURCES['CLOUD_SMOKE'] = {long_string(smoke)}")
     for name, rel in {**SOURCES, **OPTIONAL}.items():
         path = ROOT / rel
         if not path.is_file():
@@ -70,7 +78,8 @@ def build_bundle(only: list[str], signal_modes: list[str], echo: bool) -> str:
     modes_lua = ", ".join(repr(m) for m in signal_modes)
     parts.append(
         "local OPTIONS = {only = {" + only_lua + "}, hasOnly = " + ("true" if only else "false")
-        + ", signalModes = {" + modes_lua + "}, echo = " + ("true" if echo else "false") + "}")
+        + ", signalModes = {" + modes_lua + "}, echo = " + ("true" if echo else "false")
+        + ", dumpScene = " + ("true" if dump_scene else "false") + "}")
     engine = (HARNESS / "engine.luau").read_text(encoding="utf-8")
     parts.append("local Engine = (function()\n" + engine + "\nend)()")
     parts.append("local Vector3, Vector2, CFrame, Color3, UDim, UDim2, Enum = "
@@ -89,6 +98,8 @@ def main() -> int:
                     help="signal behaviour to emulate (default: both)")
     ap.add_argument("--echo", action="store_true", help="echo script output while running")
     ap.add_argument("--keep", action="store_true", help="keep the generated bundle for debugging")
+    ap.add_argument("--dump-scene", action="store_true",
+                    help="only build the scene, install the runtime and print every instance path (used by build_place.py)")
     args = ap.parse_args()
 
     luau = find_luau()
@@ -96,7 +107,7 @@ def main() -> int:
         print("SKIP — Luau CLI not found (install luau or place it at /tmp/luaubin/luau).")
         return 2
     modes = ["Deferred", "Immediate"] if args.mode == "both" else [args.mode]
-    bundle = build_bundle(args.scenarios, modes, args.echo)
+    bundle = build_bundle(args.scenarios, modes, args.echo, args.dump_scene)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "k0_harness_bundle.luau"
         path.write_text(bundle, encoding="utf-8")
@@ -110,6 +121,8 @@ def main() -> int:
         sys.stderr.write(r.stderr)
     if r.returncode != 0:
         return r.returncode
+    if args.dump_scene:
+        return 0 if "HARNESS RESULT: DUMP" in r.stdout else 1
     return 0 if "HARNESS RESULT: PASS" in r.stdout else 1
 
 

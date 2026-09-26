@@ -40,6 +40,7 @@ python3 TOOLS/run_luau_harness.py H07 H14            # yalnız seçilenler
 python3 TOOLS/run_luau_harness.py --mode Deferred    # tek sinyal modu
 python3 TOOLS/run_luau_harness.py --echo             # kaynakların print çıktısını da göster
 python3 TOOLS/run_luau_harness.py --keep             # üretilen tek dosyalık paketi _bundle.luau olarak sakla
+python3 TOOLS/run_luau_harness.py --dump-scene       # yalnız sahne ağacını yaz (TOOLS/build_place.py karşılaştırması için)
 ```
 
 Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Deferred`) veya anlık (`Immediate`) sinyal davranışıyla çalışabilir. Test edilecek place'in hangisini kullandığı bu pakette doğrulanmadı. Bu yüzden sıraya bağlı hataları yakalamak için davranış senaryoları iki modda da çalışır. Çıkış kodu: 0 = PASS, 1 = en az bir kontrol başarısız, 2 = Luau CLI yok.
@@ -50,7 +51,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 |---|---|
 | `engine.luau` | Sahte motor: veri tipleri, Instance ağacı, özellik doğrulaması, sinyaller (Deferred/Immediate), `task` zamanlayıcısı, TweenService, ProximityPrompt, RemoteEvent, WeldConstraint montajı, sanal saat |
 | `k0_world.luau` | Place kurulumu ve oyuncu eylemleri: sahneyi kur, runtime'ı yükle, oyuncu ekle/çıkar, yürü, prompt tetikle, düğmeye bas, metin sığdırma tahmini |
-| `k0_scenarios.luau` | H01–H16 senaryoları ve sonuç raporu |
+| `k0_scenarios.luau` | H01–H17 senaryoları, sahne dökümü ve sonuç raporu |
 | `../run_luau_harness.py` | Kaynakları ve harness dosyalarını tek Luau programında birleştirir ve çalıştırır |
 
 ## Senaryolar
@@ -73,6 +74,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 | H14 | Harcama oyuncuyu stoksuz ve parasız bırakamaz (yükseltme, kasiyer, maaş, yenileme) | iki mod |
 | H15 | Görülen her bildirim, yardım ve hedef metni kutusuna sığar (tahmin) | Deferred |
 | H16 | Ölçüm: talep panosunu izlemenin gerçek runtime'daki değeri (12 tohum) | Deferred |
+| H17 | Bulut smoke görev betiği (`TOOLS/place_build/cloud_smoke.luau`) bu place'te geçer; Roblox'a gönderilmeden önce betiğin kendisi denetlenir | iki mod |
 
 H16 bir ölçümdür. Sonucu not olarak yazar, geçme koşulu değildir. Tasarım yorumu [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md) §4'tedir.
 

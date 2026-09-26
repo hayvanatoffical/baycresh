@@ -440,3 +440,4 @@ Modeli tasarım sorumlusu kurar; yapay zekâ simülasyon kodunu hazırlayabilir.
 | Telemetri K1'de, kohort ölçütleri | Erken ve doğru veri | ORTAK-009, 029 |
 | Robux ile slot yok | Ek hak ekonomik güçtür | ORTAK-010 |
 | Özel sunucu abonelik; standart ve serbest mod | Doğru mekanizma; ekonomi korunur | ORTAK-011 |
+| Oyunda borsa sistemi olacak; tasarımı, kuralları ve katmanı açık | Proje sahibi kararı. §1 riskini doğrudan etkilediği için §12 frenleri ve §15 modeli olmadan sayı konmaz | UK-18, AÇIK-14 |

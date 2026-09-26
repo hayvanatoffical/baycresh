@@ -9,7 +9,9 @@ added after the headless-harness findings.
 Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
 which runs the economy/scenario model instead of inspecting the text. Layer 3
 is TOOLS/run_luau_harness.py, which executes the real Luau sources on a mock
-engine.
+engine. Layer 4 is TOOLS/build_place.py, which builds and verifies .rbxl place
+files with Lune (no Studio). Layer 5, TOOLS/roblox_cloud.py, publishes to Roblox
+and runs a smoke test there; it needs the owner's key and is never run here.
 """
 from __future__ import annotations
 
@@ -78,6 +80,14 @@ required = [
     "TOOLS/luau_harness/engine.luau",
     "TOOLS/luau_harness/k0_world.luau",
     "TOOLS/luau_harness/k0_scenarios.luau",
+    "TOOLS/build_place.py",
+    "TOOLS/roblox_cloud.py",
+    "TOOLS/test_roblox_cloud.py",
+    "TOOLS/place_build/README.md",
+    "TOOLS/place_build/build_place.luau",
+    "TOOLS/place_build/cloud_smoke.luau",
+    "TOOLS/place_build/smoke_bundle.py",
+    "PRODUCTION/K0_STUDIOSUZ_TEST_YOLU.md",
     "ASSET-PROMPTS/00-ASSET-PIPELINE.md",
     "ASSET-PROMPTS/01-3D-CHARACTERS.md",
     "ASSET-PROMPTS/02-3D-ENVIRONMENT.md",

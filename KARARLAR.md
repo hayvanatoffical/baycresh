@@ -44,6 +44,7 @@ Her kararın kaynağı ayrı işaretlenir:
 | UK-15 | **Yüksek hasar yoktur.** | 02 §7.2, 03 §14 |
 | UK-16 | Cevaplanmayan sorular Değerlendirme A'nın önerileriyle doldurulur. | Bölüm 2 |
 | UK-17 | Paket profesyonel biçimde güncellenir. | Sürüm 3.0 |
+| UK-18 | **Oyunda borsa sistemi olur.** (26 Eylül 2026) Ne işlem göreceği, kuralları ve katmanı henüz belirlenmedi: AÇIK-14. | 03 §16; tasarım bekliyor |
 
 ---
 
@@ -185,6 +186,7 @@ Bunlar onay engeli değildir. İlgili aşamada ölçülür veya kaynakla doğrul
 | AÇIK-11 | Ev ve işletme iç mekânlarına başkalarının erişim sınırları. | K5 | Tasarım |
 | AÇIK-12 | Dava bildirim penceresinin uzunluğu. | K4 | Tasarım |
 | AÇIK-13 | **K0 talep panosunun ekonomik ağırlığı.** K0.4.1 ölçümünde panoyu izleyen stok politikası izlemeyene göre 20 dakikada anlamlı fark yaratmıyor (gerçek kaynakla 12 tohumda ortalama −2,2 ₡). Seçenekler (değiştirme / talep döngüsünü uzat / talep bonusunu artır / ikisi) ölçüldü, hiçbiri uygulanmadı: `PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md` §4. Prototip config değeridir; 03 §14 baz çizgisini etkilemez. | K0 oyuncu testi öncesi | **Kullanıcı** + Tasarım |
+| AÇIK-14 | **Borsa sisteminin tasarımı (UK-18).** Karar verilen şey yalnız borsanın olacağıdır. Açık sorular: (1) Ne işlem görür: kurgusal NPC şirketleri mi, oyuncu işletmelerinin payları mı? (2) Fiyat neye bağlıdır: şehir olayları mı, oyuncuların alım-satımı mı? (3) Manipülasyon ve tekelleşme frenleri: işlem ve pozisyon sınırı, komisyonun para çıkışı olarak çalışması (03 §1, §11, §12.1). (4) Kural 1 sınırı: borsa şansa dayalı bir oyun gibi çalışmaz; Robux ile bağlantısı olmaz (03 §2, §13). (5) Kalıcı veri (K1) ve telemetri gerektirir; 03 §15 ekonomi modeline bir borsa yolu eklenmeden sayı konmaz. K0 kapsamında değildir. Roblox'un ilgili platform kuralları yayın ayında resmî kaynaktan kontrol edilir. | Katman seçimi K1 kapısından sonra | **Kullanıcı** + Tasarım |
 
 ---
 

@@ -41,6 +41,21 @@ end
 local CONFIG = readConfig()
 local C = CONFIG.Prototype
 
+-- build_place.py compares the scene tree Lune builds from the same sources with
+-- this one (two independent implementations of the DOM must agree).
+if OPTIONS.dumpScene then
+    local w = K0World.new({signalMode = "Deferred"})
+    w:buildScene()
+    w:installRuntime()
+    for _, service in ipairs({"Workspace", "Lighting", "ReplicatedStorage", "ServerScriptService", "StarterPlayer"}) do
+        for _, inst in ipairs(w.game:GetService(service):GetDescendants()) do
+            print("SCENE\t" .. inst:GetFullName() .. "\t" .. inst.ClassName)
+        end
+    end
+    print("HARNESS RESULT: DUMP")
+    return
+end
+
 -- Every player-facing text any scenario produced, for the fit check in H15.
 local SEEN_TEXT = {notice = {}, help = {}, goal = {}}
 
@@ -982,6 +997,29 @@ scenario("H16", "Measurement: value of following the demand board (real runtime,
     table.sort(diffs)
     note(string.format("demand-only minus other-only operating result over 20 min: mean %+.1f ₡, median %+.1f ₡, demand wins %d/12; sales %.1f vs %.1f",
         sum / #diffs, (diffs[6] + diffs[7]) / 2, wins, salesA / 12, salesB / 12))
+end)
+
+scenario("H17", "Cloud smoke task script (TOOLS/place_build/cloud_smoke.luau) runs against this place", {"Deferred", "Immediate"}, function(mode)
+    -- Luau Execution: the place is loaded but its Scripts do not start; the task
+    -- script runs alone and starts the runtime itself.
+    local w = K0World.new({signalMode = mode, echo = OPTIONS.echo})
+    w:buildScene()
+    w:installRuntime()
+    local rec = w.world:runChunk(SOURCES.CLOUD_SMOKE, "cloud_smoke", nil, w.serverContext)
+    w.world:advance(5)
+    check(rec ~= nil and rec.finished == true, "smoke script finished")
+    local report = rec and rec.returned and rec.returned[1]
+    check(type(report) == "table" and #report.checks >= 20, "smoke returned its report (" .. (type(report) == "table" and #report.checks or 0) .. " checks)")
+    if type(report) == "table" then
+        local failedChecks = {}
+        for _, c in ipairs(report.checks) do
+            if not c.ok then table.insert(failedChecks, c.name .. (c.detail and (" (" .. tostring(c.detail) .. ")") or "")) end
+        end
+        check(report.pass == true, "smoke reports PASS" .. (#failedChecks > 0 and (": " .. table.concat(failedChecks, "; ")) or ""))
+        note(string.format("smoke: %d checks, %d failed", #report.checks, #failedChecks))
+    end
+    check(#w:outputMatching("^SMOKE RESULT: PASS") == 1, "smoke printed its PASS line")
+    noScriptErrors(w)
 end)
 
 ------------------------------------------------------------------ report

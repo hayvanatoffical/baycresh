@@ -6,7 +6,12 @@ dogrular ve ZIP'ten cikarilan kopyada her iki dogrulama katmanini yeniden
 calistirir. Boylece "ZIP icindeki paket gecerli mi" sorusu, depodaki calisma
 kopyasindan bagimsiz olarak cevaplanir. Luau CLI bulunursa katman 3 (gercek
 kaynagi sahte motorda kosturan harness) de iki kopyada calisir; bulunmazsa
-atlandigi acikca yazilir.
+atlandigi acikca yazilir. Lune bulunursa katman 4 (Studio'suz place kurulumu,
+TOOLS/build_place.py) ve Open Cloud istemcisinin sahte sunucu testi
+(TOOLS/test_roblox_cloud.py) de calisir. Hicbiri Roblox'a baglanmaz.
+
+dist/ klasoru pakete girmez: ZIP'ler ve kurulan .rbxl dosyalari turetilmis
+ciktidir, kaynak degildir.
 
 K0.3 FINAL veya baska bir surum ZIP'inin uzerine YAZMAZ: hedef dosya varsa
 islem durur.
@@ -41,6 +46,8 @@ def package_files() -> list[Path]:
             continue
         rel = p.relative_to(ROOT)
         if set(rel.parts) & EXCLUDE_DIRS or rel.name in EXCLUDE_NAMES:
+            continue
+        if rel.parts[0] == "dist":
             continue
         if rel.suffix == ".zip":
             continue
@@ -85,15 +92,21 @@ def run(cmd: list[str], cwd: Path) -> tuple[int, str]:
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
-TOOLS_TO_RUN = ("TOOLS/validate_package.py", "TOOLS/scenarios_k0.py", "TOOLS/run_luau_harness.py")
-SKIP_CODE = 2  # run_luau_harness.py: Luau CLI yok
+TOOLS_TO_RUN = ("TOOLS/validate_package.py", "TOOLS/scenarios_k0.py", "TOOLS/run_luau_harness.py",
+                "TOOLS/build_place.py", "TOOLS/test_roblox_cloud.py")
+SKIP_CODE = 2  # arac calisamadi: gereken ikili dosya veya girdi yok
+SKIP_REASON = {
+    "TOOLS/run_luau_harness.py": "Luau CLI yok — katman 3 bu pakette kosturulmadi",
+    "TOOLS/build_place.py": "Lune yok — katman 4 (place kurulumu) bu pakette kosturulmadi",
+    "TOOLS/test_roblox_cloud.py": "kurulmus default place yok — Open Cloud istemci testi kosturulmadi",
+}
 
 
 def validate(where: Path, prefix: str) -> None:
     for tool in TOOLS_TO_RUN:
         code, txt = run([sys.executable, tool], where)
-        if tool.endswith("run_luau_harness.py") and code == SKIP_CODE:
-            print(f"  {prefix}{tool}: ATLANDI (Luau CLI yok) — katman 3 bu pakette kosturulmadi")
+        if tool in SKIP_REASON and code == SKIP_CODE:
+            print(f"  {prefix}{tool}: ATLANDI ({SKIP_REASON[tool]})")
             continue
         print(f"  {prefix}{tool}: {'PASS' if code == 0 else 'FAIL'}")
         if code != 0:

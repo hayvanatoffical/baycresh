@@ -99,6 +99,10 @@ Ayrıntı: [`../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../PRODUCTION/K0.4.
 6c. **K0.4.1 kontrolü:** NPC parçaları köke `WeldConstraint` ile bağlı. İlk müşteri ve yaya **tek parça** yürümeli; dağılan veya düşen parça varsa test durur. Adımlar: [`../PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](../PRODUCTION/K0.4_NEXT_TEST_PLAN.md) Aşama 0 ve 2d.
 7. Android ve üç bağımsız 20 dakikalık ürün testi yapılmadan `DOĞRULANDI` yazmayın.
 
+## Studio'suz geçiş (telefon)
+
+Studio yalnız Windows ve macOS'ta çalışır. Bilgisayar yoksa place bu depoda kurulur: `python3 ../TOOLS/build_place.py`. Bu komut beş kurucuyu ve üç aktif kaynağı Studio yollarıyla bir `.rbxl` dosyasına koyar ve dosyayı doğrular. Sahibin Open Cloud anahtarıyla dosya var olan bir place'e yüklenir. Smoke testi Roblox sunucusunda çalışır ve oyun Android'deki Roblox uygulamasından oynanır. Kurulan place temiz sahnedir; Studio place'indeki elle yerleştirilmiş AI modelleri içinde yoktur. Adımlar ve telefonda yapılamayan test satırları: [`../PRODUCTION/K0_STUDIOSUZ_TEST_YOLU.md`](../PRODUCTION/K0_STUDIOSUZ_TEST_YOLU.md). Araç ayrıntısı: [`../TOOLS/place_build/README.md`](../TOOLS/place_build/README.md).
+
 ## Bilinen sınırlar
 
 K0 hâlâ tek satıcılı, bellekte yaşayan bir prototiptir. DataStore, işlem kimliği, oturumlar arası geri dönüş, gerçek R15 NPC rig/animasyonları, çok oyunculu işletme yazarlığı ve gerçek cihaz performansı K0.4.1 kaynak paketinde çözülmüş sayılmaz. Güncel liste: [`../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md`](../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md). Bunlar sonraki katmanların veya Studio/cihaz QA'nın işidir.

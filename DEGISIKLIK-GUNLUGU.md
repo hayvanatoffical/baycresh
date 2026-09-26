@@ -1,5 +1,19 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 26 Eylül 2026 — Studio'suz test yolu ve borsa kaydı
+
+Proje sahibinin şu an yalnız telefonu (Redmi, Android) var. Roblox Studio telefonda çalışmıyor. Bu yüzden place'i Studio'suz kuran, yükleyen ve Roblox sunucusunda deneyen bir yol eklendi. Oyun kaynağı değişmedi (`K0-market-0.4.1`).
+
+- **Borsa kararı kaydedildi.** Proje sahibi: oyunda borsa sistemi olacak. `KARARLAR.md` UK-18 ve `EKIP/03-EKONOMI.md` §16'ya yazıldı. Ne işlem göreceği, kuralları ve katmanı açık: AÇIK-14. K0 kapsamında değildir. Hiçbir sayı veya kural onaylanmış gibi yazılmadı.
+- **Araştırma.** Studio yalnız Windows ve macOS'ta çalışır. Roblox'un telefondaki Build sekmesi yapay zekâyla istemden oyun üretir ve yalnız Yeni Zelanda'da alfadır; Luau kaynağını test etmeye yaramaz. Açık kaynaklı tam bir Studio yok. Kaynaklar ve telefon için adımlar: [`PRODUCTION/K0_STUDIOSUZ_TEST_YOLU.md`](PRODUCTION/K0_STUDIOSUZ_TEST_YOLU.md).
+- **4. doğrulama katmanı: Studio'suz place kurulumu.** `TOOLS/build_place.py` kurucuları açık kaynaklı Lune'da, Roblox'un yansıma veritabanıyla çalıştırır ve dört test profili için `.rbxl` yazar (`default`, `permit90`, `cash325`, `cash385`). Profiller test planının "Edit-mode kopyasında değeri değiştir" adımlarının yerini alır. Her dosya beş kontrolden geçer; sahne ağacı harness'in kurduğu ağaçla karşılaştırılır. Sonuç: dört profil PASS, her biri 405 nesne.
+- **5. katman: Open Cloud ile yükleme ve bulut smoke.** `TOOLS/roblox_cloud.py`, sahibin API anahtarıyla doğrulanmış place'i var olan bir place'e yükler ve `cloud_smoke.luau` betiğini Roblox sunucusunda çalıştırır. Anahtar yalnız ortam değişkeninden okunur ve hiçbir çıktıya yazılmaz. Ana place'e `--allow-main-place` olmadan yüklemez. Smoke betiği harness'te H17 olarak iki modda geçti (29 kontrol). İstemci sahte sunucuya karşı 22/22 geçti. **Roblox'a henüz hiçbir şey gönderilmedi.**
+- **Harness:** H17 eklendi, 28/28 PASS. `build_package.py` artık `dist/` klasörünü pakete koymuyor ve Lune varsa 4. katmanı da çalıştırıyor.
+- **Sahipten beklenen:** hangi place'e yükleneceği kararı, API anahtarı ve iki kimlik numarası. Anahtar ortam ayarlarına eklenir, sohbete yazılmaz.
+- **Durum:** `PLACE BUILD VERIFIED` (Lune) · `CLOUD SMOKE PENDING` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Telefonda yapılamayan iki test satırı (2c hızlı `FireServer`, B14 Stop özeti) `STUDIO PENDING` kalır.
+
+---
+
 ## 26 Eylül 2026 — K0.4.1: kaynağın çalıştırılarak denetlenmesi
 
 K0.4 kaynağı bu kez okunarak veya modellenerek değil, **çalıştırılarak** denetlendi. Roblox Studio erişimi olmadığı için gerçek sahne kurucularını, migration'ı ve K0 runtime'ını sahte bir motorda, sanal saatle ve oyuncu gibi davranarak çalıştıran başsız bir harness kuruldu. Yeni oyun özelliği eklenmedi; fiyat, kapasite ve oranlar değişmedi. Ayrıntı: [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md).
