@@ -2,6 +2,7 @@
 -- Read-only state presentation. All economic decisions are validated by the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -182,10 +183,97 @@ end
 watchCamera()
 Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
 
+-- K0.4.2 sound cues (ASSET-PROMPTS/06-SFX.md). Sound only repeats what the HUD
+-- already shows (EKIP/06 §8), plays for the seller only, and never for the state
+-- found on the first render or after an owner handover.
+local sounds = {}
+local function play(name)
+    local spec = Config.Sounds and Config.Sounds[name]
+    if type(spec) ~= "table" or type(spec.Id) ~= "string" or spec.Id == "" then return end
+    local sound = sounds[name]
+    if not sound then
+        sound = Instance.new("Sound")
+        sound.Name = "K0Sfx_" .. name
+        sound.SoundId = spec.Id
+        sound.Volume = spec.Volume or 0.5
+        sound.Parent = SoundService
+        sounds[name] = sound
+    end
+    sound:Play()
+end
+
+-- One server update changes several attributes. The changes are collected and
+-- resolved once, so one event plays one cue whatever the signal behaviour.
+local CUE_ORDER = {"PermitLapse", "Upgrade", "Hire", "SaleSuccess", "SaleFail", "Liquidate",
+    "StockPlace", "CustomerArrive", "Negotiate", "Notify"}
+local CASH_AFTER_SALE = 0.12 -- seconds; 06-SFX: sale and cash read as one event
+local heard = nil
+local pending = nil
+
+local function flushCues()
+    local batch = pending
+    pending = nil
+    if not batch then return end
+    -- A lapse pauses the waiting customer, which the server also counts as a lost sale.
+    if batch.PermitLapse then batch.SaleFail = nil end
+    -- A notice that accompanies another cue stays silent.
+    for name in pairs(batch) do
+        if name ~= "Notify" then batch.Notify = nil break end
+    end
+    for _, name in ipairs(CUE_ORDER) do
+        if batch[name] then play(name) end
+    end
+    if batch.SaleSuccess then task.delay(CASH_AFTER_SALE, play, "Cash") end
+end
+
+local function want(name)
+    if not pending then
+        pending = {}
+        task.defer(flushCues)
+    end
+    pending[name] = true
+end
+
+local function listen()
+    if player:GetAttribute("K0Owner") ~= true then
+        heard = nil
+        return
+    end
+    local now = {
+        sales = player:GetAttribute("K0Sales") or 0,
+        lost = player:GetAttribute("K0LostSales") or 0,
+        stock = player:GetAttribute("K0StockPurchases") or 0,
+        liquidations = player:GetAttribute("K0Liquidations") or 0,
+        ready = player:GetAttribute("K0CustomerReady") == true,
+        bargain = (player:GetAttribute("K0OfferOpen") == true and player:GetAttribute("K0OfferType") == "Bargainer")
+            and (player:GetAttribute("K0OfferId") or 0) or 0,
+        level = player:GetAttribute("K0Level") or 1,
+        hired = player:GetAttribute("K0Hired") == true,
+        lapsed = player:GetAttribute("K0RentDue") == true,
+        notice = player:GetAttribute("K0NoticeSerial") or 0,
+    }
+    local before = heard
+    heard = now
+    if not before then return end
+    if now.sales > before.sales then want("SaleSuccess") end
+    if now.lost > before.lost then want("SaleFail") end
+    if now.stock > before.stock then want("StockPlace") end
+    if now.liquidations > before.liquidations then want("Liquidate") end
+    if now.ready and not before.ready then want("CustomerArrive") end
+    if now.bargain ~= 0 and now.bargain ~= before.bargain then want("Negotiate") end
+    if now.level > before.level then want("Upgrade") end
+    if now.hired and not before.hired then want("Hire") end
+    if now.lapsed and not before.lapsed then want("PermitLapse") end
+    if now.notice ~= before.notice then want("Notify") end
+end
+
 local function send(action)
     if not offer.Visible then return end
     local id = player:GetAttribute("K0OfferId")
-    if type(id) == "number" and id > 0 then decision:FireServer(id, action) end
+    if type(id) == "number" and id > 0 then
+        play("UiClick")
+        decision:FireServer(id, action)
+    end
 end
 accept.Activated:Connect(function() send("accept") end)
 counter.Activated:Connect(function() send("counter") end)
@@ -351,3 +439,10 @@ local attributes = {
 }
 for _, name in ipairs(attributes) do player:GetAttributeChangedSignal(name):Connect(render) end
 render()
+
+local cueAttributes = {
+    "K0Owner", "K0Sales", "K0LostSales", "K0StockPurchases", "K0Liquidations", "K0CustomerReady",
+    "K0OfferOpen", "K0OfferType", "K0OfferId", "K0Level", "K0Hired", "K0RentDue", "K0NoticeSerial",
+}
+for _, name in ipairs(cueAttributes) do player:GetAttributeChangedSignal(name):Connect(listen) end
+listen()

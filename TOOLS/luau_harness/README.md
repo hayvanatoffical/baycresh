@@ -20,12 +20,13 @@ Senaryolar oyuncu gibi davranır: yürür, `ProximityPrompt` tetikler, HUD düğ
 
 Bu araç **Roblox Studio değildir**. Buradaki bir PASS, `STUDIO PENDING` ve `DEVICE PENDING` statülerini kaldırmaz.
 
-- Fizik, çarpışma, render, ses ve ağ gecikmesi yok. Sunucu ve istemci aynı DataModel'i paylaşır; replikasyon anlık ve kusursuzdur.
+- Fizik, çarpışma, render, ses ve ağ gecikmesi yok. `Sound:Play()` ses çıkarmaz; yalnız hangi istemcinin hangi sesi çaldığı kaydedilir (H18). Sunucu ve istemci aynı DataModel'i paylaşır; replikasyon anlık ve kusursuzdur.
 - `Random` deterministik bir yedektir, Roblox'un PCG üreteciyle **bit düzeyinde aynı değildir**. Tohumlu müşteri dizisi burada kendi içinde karşılaştırılabilir, ama Studio'daki diziyle aynı değildir.
 - Motor API'si yalnız kaynakların kullandığı yüzey kadar taklit edilir. Bilinmeyen üye veya yanlış tip Roblox'taki gibi hata verir. Bu yüzden bir yazım hatası sessizce geçmez. Yine de taklit edilen davranış belgelere göre yazılmıştır; motorun kendisi değildir.
 - `PlayerRemoving` ile `Parent` değişiminin sırası gibi motor ayrıntıları gerçek Roblox'ta **doğrulanmadı**.
 - HUD metin sığdırma kontrolü (H12, H15) bir **tahmindir**: karakter genişliği ortalama bir glif ölçüsüyle hesaplanır. Gerçek font ölçümü değildir.
 - "Part yazımı" sayacı yalnız harness içindeki özellik yazımlarını sayar. Cihaz FPS'i, ağ bant genişliği veya bellek hakkında bir şey **söylemez**.
+- K0.4.2 ses gruplaması, bir sunucu güncellemesindeki attribute değişikliklerinin istemcide `task.defer` işi çalışmadan önce birlikte uygulandığını varsayar. Harness bunu iki sinyal modunda da sağlar; gerçek replikasyonda **doğrulanmadı**. Varsayım yanlışsa en kötü sonuç, bir bildirim sesinin başka bir sesle birlikte çalmasıdır.
 - `os.clock()` sanal saate bağlıdır. Luau belgelerindeki "süre ölçümü için zaman damgası" tanımına göre duvar saati gibi davrandığı varsayılır.
 
 ## Kurulum
@@ -51,7 +52,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 |---|---|
 | `engine.luau` | Sahte motor: veri tipleri, Instance ağacı, özellik doğrulaması, sinyaller (Deferred/Immediate), `task` zamanlayıcısı, TweenService, ProximityPrompt, RemoteEvent, WeldConstraint montajı, sanal saat |
 | `k0_world.luau` | Place kurulumu ve oyuncu eylemleri: sahneyi kur, runtime'ı yükle, oyuncu ekle/çıkar, yürü, prompt tetikle, düğmeye bas, metin sığdırma tahmini |
-| `k0_scenarios.luau` | H01–H17 senaryoları, sahne dökümü ve sonuç raporu |
+| `k0_scenarios.luau` | H01–H18 senaryoları, sahne dökümü ve sonuç raporu |
 | `../run_luau_harness.py` | Kaynakları ve harness dosyalarını tek Luau programında birleştirir ve çalıştırır |
 
 ## Senaryolar
@@ -75,6 +76,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 | H15 | Görülen her bildirim, yardım ve hedef metni kutusuna sığar (tahmin) | Deferred |
 | H16 | Ölçüm: talep panosunu izlemenin gerçek runtime'daki değeri (12 tohum) | Deferred |
 | H17 | Bulut smoke görev betiği (`TOOLS/place_build/cloud_smoke.luau`) bu place'te geçer; Roblox'a gönderilmeden önce betiğin kendisi denetlenir | iki mod |
+| H18 | K0.4.2 sesleri: katılımda ses yok; her olay tek ses (bildirim sesi başka sesle birlikte susar, kayıt bitimi red sesini bastırır); 25 dakikalık oturumda ses sayısı olay sayısına eşit; izleyici ses duymaz; devirde eski durum çalınmaz; boş `Id` ses nesnesi bile oluşturmaz | iki mod |
 
 H16 bir ölçümdür. Sonucu not olarak yazar, geçme koşulu değildir. Tasarım yorumu [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md) §4'tedir.
 

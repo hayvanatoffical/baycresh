@@ -1262,15 +1262,18 @@ function Engine.new(options)
         PaddingLeft = {type = "UDim", default = function() return udim(0, 0) end}, PaddingRight = {type = "UDim", default = function() return udim(0, 0) end},
         PaddingTop = {type = "UDim", default = function() return udim(0, 0) end}, PaddingBottom = {type = "UDim", default = function() return udim(0, 0) end}}})
 
-    -- Sound (declared so the harness can validate optional audio cues) ----
+    -- Sound: no audio is produced. Play() is recorded with the calling client so
+    -- a scenario can check which cue fired, for whom and how often (K0.4.2).
     defClass("Sound", "Instance", {props = {
         SoundId = {type = "string", default = ""}, Volume = {type = "number", default = 0.5},
         PlaybackSpeed = {type = "number", default = 1}, Looped = {type = "boolean", default = false},
         RollOffMaxDistance = {type = "number", default = 10000}},
         methods = {
             Play = function(self)
+                local ctx = currentContext()
                 world.soundPlays = world.soundPlays or {}
-                table.insert(world.soundPlays, {t = world.now, name = self.Name, id = self.SoundId})
+                table.insert(world.soundPlays, {t = world.now, name = self.Name, id = self.SoundId,
+                    volume = self.Volume, player = ctx and ctx.playerName, parent = self.Parent and self.Parent.ClassName})
             end,
             Stop = function(self) end,
         },

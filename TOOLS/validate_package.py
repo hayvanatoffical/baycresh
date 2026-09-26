@@ -4,7 +4,8 @@
 This is not a Roblox Studio/Luau runtime test. It verifies package topology,
 version consistency, retired-runtime isolation, local Markdown links, and the
 source-level invariants that K0.4 established after the K0.3 audit and K0.4.1
-added after the headless-harness findings.
+added after the headless-harness findings, and (K0.4.2) that every sound cue has
+a well-formed candidate id with a provenance record.
 
 Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
 which runs the economy/scenario model instead of inspecting the text. Layer 3
@@ -23,7 +24,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "K0-market-0.4.1"
+EXPECTED_VERSION = "K0-market-0.4.2"
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -243,7 +244,7 @@ if unwatched:
     warn(f"HUD reads but does not subscribe to: {sorted(unwatched)} (may render stale)")
 
 # ------------------------------------------------- config field consumption
-proto = config.split("Prototype = {", 1)[-1]
+proto = config.split("Prototype = {", 1)[-1].split("\n    Sounds = {", 1)[0]
 config_keys = set(re.findall(r"^\s{8}(\w+)\s*=", proto, re.M))
 used_keys = set(re.findall(r"\bC\.(\w+)", server)) | set(re.findall(r"\bC\.(\w+)", hud))
 missing_in_config = used_keys - config_keys
@@ -252,6 +253,35 @@ if missing_in_config:
 unused = config_keys - used_keys
 if unused:
     warn(f"config fields defined but never read by the runtime: {sorted(unused)}")
+
+# ------------------------------------------------------- K0.4.2 sound cues
+# ASSET-PROMPTS/06-SFX.md lists twelve cues. Each config slot holds a Creator
+# Store candidate id (or "" for silent) and a Sound.Volume; each id must have a
+# row in PRODUCTION/ASSET_PROVENANCE.md so an unlisted asset cannot slip in.
+SFX_SLOTS = {"SaleSuccess", "Cash", "UiClick", "StockPlace", "CustomerArrive", "SaleFail",
+             "Negotiate", "Upgrade", "Hire", "Notify", "PermitLapse", "Liquidate"}
+sounds_block = re.search(r"\n    Sounds = \{\n(.*?)\n    \},", config, re.S)
+if not sounds_block:
+    fail("K0.4.2 Sounds table missing from config")
+else:
+    entries = re.findall(r'^\s{8}(\w+)\s*=\s*\{Id\s*=\s*"([^"]*)",\s*Volume\s*=\s*([\d.]+)\}',
+                         sounds_block.group(1), re.M)
+    slots = {name for name, _, _ in entries}
+    if slots != SFX_SLOTS:
+        fail(f"Sounds slots differ from 06-SFX: missing {sorted(SFX_SLOTS - slots)}, "
+             f"unexpected {sorted(slots - SFX_SLOTS)}")
+    provenance = read("PRODUCTION/ASSET_PROVENANCE.md")
+    for name, sid, vol in entries:
+        if sid and not re.fullmatch(r"rbxassetid://\d+", sid):
+            fail(f"Sounds.{name}: Id must be rbxassetid://<number> or empty, got {sid!r}")
+        if not 0 < float(vol) <= 2:
+            fail(f"Sounds.{name}: Volume {vol} outside (0, 2]")
+        if sid and f"store/asset/{sid.split('//', 1)[1]}" not in provenance:
+            fail(f"Sounds.{name}: asset {sid} has no store-linked row in PRODUCTION/ASSET_PROVENANCE.md")
+    played = set(re.findall(r'\b(?:play|want)\("(\w+)"\)', hud)) | set(re.findall(r'\bplay,\s*"(\w+)"', hud))
+    if played != SFX_SLOTS:
+        fail(f"HUD cues differ from config slots: never played {sorted(SFX_SLOTS - played)}, "
+             f"no slot for {sorted(played - SFX_SLOTS)}")
 
 # ------------------------------------------------- telemetry completeness
 for token in ["K0FirstStockSeconds", "K0FirstOfferSeconds", "K0FirstDecisionSeconds",

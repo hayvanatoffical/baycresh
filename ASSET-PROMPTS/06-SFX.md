@@ -1,6 +1,6 @@
 # 06 — Ses efektleri (SFX)
 
-**Durum:** TASLAK · K0.4
+**Durum:** TASLAK · K0.4 · K0.4.2'de Creator Store adayları bağlandı (dinlenmedi)
 
 SFX, K0'ın **en yüksek getirili ses yatırımıdır**. Müzikten önce gelir: karar geri bildirimi sesle anında okunur, müzik yalnız atmosfer verir.
 
@@ -22,6 +22,14 @@ SFX, K0'ın **en yüksek getirili ses yatırımıdır**. Müzikten önce gelir: 
 | `SFX-LIQUIDATE` | K0.4 tasfiye | 0.4–0.7 s | 2 |
 
 `SFX-PERMIT-LAPSE` ve `SFX-LIQUIDATE` K0.4'te eklendi çünkü bu iki durum artık gerçek birer oyuncu kararı; sessiz kalırlarsa oyuncu ne olduğunu anlamaz.
+
+## K0.4.2 — bağlanan adaylar
+
+Her kimlik `K0MarketConfig.Sounds` içinde bir slota bağlıdır ve HUD'dan çalar: `SFX-SALE-SUCCESS` → `SaleSuccess`, `SFX-CASH` → `Cash`, `SFX-UI-CLICK` → `UiClick`, `SFX-STOCK-PLACE` → `StockPlace`, `SFX-CUSTOMER-ARRIVE` → `CustomerArrive`, `SFX-SALE-FAIL` → `SaleFail`, `SFX-NEGOTIATE` → `Negotiate`, `SFX-UPGRADE` → `Upgrade`, `SFX-HIRE` → `Hire`, `SFX-NOTIFY` → `Notify`, `SFX-PERMIT-LAPSE` → `PermitLapse`, `SFX-LIQUIDATE` → `Liquidate`.
+
+Adaylar Creator Store'da Roblox ve doğrulanmış partner ProSoundEffects kütüphanelerinden seçildi ve ölçüldü; **dinlenmedi**. Kaynak bağlantısı, ölçüm ve bu dosyadaki şartlardan sapmalar: [`../PRODUCTION/ASSET_PROVENANCE.md`](../PRODUCTION/ASSET_PROVENANCE.md). Sahip dinleyip onaylar veya değiştirir; boş `Id` o sesi susturur. Aşağıdaki promptlar, kütüphanede uygun ses bulunmayan slotlar (özellikle `SFX-HIRE` ve `SFX-CUSTOMER-ARRIVE`) için üretim yolu olarak geçerli kalır.
+
+Tetikleyiciler HUD'da attribute değişiminden okunur: satış sayacı artınca `SaleSuccess` ve 0,12 s sonra `Cash`; kayıp satış (red, karşı teklif reddi, sabırsız müşteri) `SaleFail`; stok alımı `StockPlace`; müşteri tezgâhta hazır olunca `CustomerArrive`; pazarlıkçı teklif kartı açılınca `Negotiate`; bildirim `Notify`, ama aynı güncellemede başka ses varsa susar. Kayıt bitimi bekleyen müşteriyi durdurursa yalnız `PermitLapse` çalar.
 
 ## Ortak şart
 

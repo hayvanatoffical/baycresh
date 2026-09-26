@@ -1,6 +1,6 @@
 # K0 test kaydı — doldurulacak şablon
 
-**Kaynak hedefi:** `K0-market-0.4.1`  
+**Kaynak hedefi:** `K0-market-0.4.2`  
 **Durum:** Şablon; yapılmış test veya oyuncu sonucu içermez. Her test sürümü için ayrı kopya oluşturulur. Kapı kararı `EKIP/07-YOL-HARITASI.md` §2'ye dayanır.
 
 > K0.3 kontrollü oynanış RNG seed'i kullanır ve her test sahibi atandığında aynı ekonomi dizisini baştan başlatır. Dekoratif kalabalık RNG'si ayrıdır. Katılımcıya 20 dakikalık geri sayım gösterilmez; süre dolduğunda oyun durmaz. Böylece “süre bitince kendiliğinden devam” davranışı daha az yönlendirilir.
@@ -8,7 +8,7 @@
 | Alan | Kayıt |
 |---|---|
 | Build / place adı ve ID | TBD |
-| Kaynak sürümü / commit | `K0-market-0.4.1` / TBD |
+| Kaynak sürümü / commit | `K0-market-0.4.2` / TBD |
 | Test tarihi ve saat dilimi | TBD |
 | Test edilen değişiklikler | TBD |
 | Cihaz / giriş yöntemi | TBD |
@@ -76,6 +76,8 @@ Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özell
 - **K0.4.1 · stoksuz harcama reddi:** "kasada N ₡ kalır ve rafta ürün yok" bildirimi görüldü mü, oyuncu anladı mı: **ölçülmedi** — kanıt yeri:
 - **K0.4.1 · NPC hareketi:** müşteri ve yayalar tek parça hâlinde yürüyor mu (dağılan/düşen parça yok): **ölçülmedi** — kanıt yeri:
 - Android FPS / bellek / dokunmatik: **ölçülmedi** — cihaz ve sahne:
+- **K0.4.2 · sesler:** telefonda duyulan / duyulmayan slotlar, konsoldaki ses yükleme uyarıları, rahatsız eden ses: **ölçülmedi** — kanıt yeri:
+- **K0.4.2 · ses aday onayı:** sahip her slotu Creator Store bağlantısından dinledi mi, hangileri değişecek: **yapılmadı** — `PRODUCTION/ASSET_PROVENANCE.md` durum sütunu:
 - Veri kaydı/geri dönüş: **K1 kapsamı; K0'da beklenmez**.
 
 ## Kapı kararı

@@ -1,5 +1,19 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 26 Eylül 2026 — K0.4.2: hazır sesler
+
+K0'da ses yoktu. `ASSET-PROMPTS/06-SFX.md` listesindeki 12 ses yuvasına Roblox Creator Store'dan hazır ses adayları bağlandı. Ekonomi değerleri ve oyun kuralları değişmedi. Kaynak sürümü `K0-market-0.4.2`.
+
+- **Adaylar, dinlenmedi.** 12 sesin hepsi Roblox'un kendi hesabından veya ProSoundEffects'ten, ücretsiz Creator Store sesleri. Başlığa ve ölçüme göre seçildi: süre, tepe seviyesi, frekans bandı ve baştaki sessizlik ölçüldü. **Kimse dinlemedi.** Kaynak, lisans ve ölçüm tablosu [`PRODUCTION/ASSET_PROVENANCE.md`](PRODUCTION/ASSET_PROVENANCE.md) içinde; hepsi `ADAY / DİNLENMEDİ`. Sahip dinleyip onaylar veya değiştirir. `K0MarketConfig.Sounds` içinde Id boş bırakılan ses çalmaz.
+- **Tetikleme.** Sesler yalnız tezgâh sahibinin istemcisinde, `SoundService` altında 2B çalar. Tetikleyici, sunucunun zaten yazdığı oyuncu attribute'larıdır; RemoteEvent veya sunucu kodu eklenmedi. Kural: bir olay, bir ses. Aynı karede gelen değişiklikler birleştirilir. Kayıt süresi dolunca `SaleFail` değil yalnız `PermitLapse` çalar. Başka bir ses varsa `Notify` susar. `Cash` sesi satıştan 0,12 s sonra gelir. Oyuna girişte, izleyicide ve sahip devrinde eski olaylar yeniden çalmaz. Ses, HUD'da görünmeyen hiçbir bilgiyi taşımaz.
+- **Harness H18.** Her olay türünde çalma sayısı, olay sayısına eşit olmalı. İzleyici hiç ses duymamalı. Boş Id sessiz kalmalı ve nesne oluşturmamalı. Kayıt süresi bekleyen müşteriyle aynı anda dolarsa yalnız `PermitLapse` çalmalı. Sonuç: iki sinyal modunda **30/30 PASS**. İki bilinçli bozma denemesi (Notify bastırma, PermitLapse bastırma) H18'i düşürdü.
+- **Doğrulayıcı.** `validate_package.py` 12 yuvayı, Id biçimini, 0–2 ses aralığını, her Id'nin provenance kaydını ve HUD'un kullandığı ses adlarının yuvalarla birebir eşleştiğini kontrol ediyor.
+- **Ölçüm notu.** H11'in "part property writes" sayacı 81 276'dan 81 308'e çıktı. Sayaç tüm betik özellik atamalarını sayıyor. Fark, istemcinin her ses için bir kez oluşturduğu Sound nesnesinin atamalarıdır (Id'ler boşaltılınca 81 276'ya dönüyor). NPC yazımı değişmedi.
+- **Diğer katmanlar.** Statik PASS · senaryo 19/20 + 1 açık tasarım bulgusu (AÇIK-13, değişmedi) · 4 place profili PASS (405 nesne; sesler çalışma anında oluşur) · Cloud istemci testi 22/22.
+- **Durum:** `HARNESS VERIFIED` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Sesler `ADAY / DİNLENMEDİ`. Harness ses çalmaz, yalnız `Play` çağrılarını sayar. Seslerin yüklendiği, duyulduğu ve dengesi Studio'da veya telefonda kontrol edilecek: [`PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](PRODUCTION/K0.4_NEXT_TEST_PLAN.md) Aşama 3.
+
+---
+
 ## 26 Eylül 2026 — Studio'suz test yolu ve borsa kaydı
 
 Proje sahibinin şu an yalnız telefonu (Redmi, Android) var. Roblox Studio telefonda çalışmıyor. Bu yüzden place'i Studio'suz kuran, yükleyen ve Roblox sunucusunda deneyen bir yol eklendi. Oyun kaynağı değişmedi (`K0-market-0.4.1`).

@@ -1022,6 +1022,243 @@ scenario("H17", "Cloud smoke task script (TOOLS/place_build/cloud_smoke.luau) ru
     noScriptErrors(w)
 end)
 
+-- Sound cues (K0.4.2) ---------------------------------------------------------
+-- The harness produces no audio; Sound:Play() is recorded with the calling client.
+local function plays(w, who, since)
+    local list = {}
+    for i, r in ipairs(w.world.soundPlays or {}) do
+        if i > (since or 0) and (who == nil or r.player == who) then table.insert(list, r) end
+    end
+    return list
+end
+local function playMark(w) return #(w.world.soundPlays or {}) end
+local function cueName(r) return (string.gsub(r.name, "^K0Sfx_", "")) end
+local function cueCounts(list)
+    local counts = {}
+    for _, r in ipairs(list) do counts[cueName(r)] = (counts[cueName(r)] or 0) + 1 end
+    return counts
+end
+local function cueText(counts)
+    local names = {}
+    for n, c in pairs(counts) do table.insert(names, n .. "x" .. c) end
+    table.sort(names)
+    return #names > 0 and table.concat(names, ",") or "none"
+end
+-- Exactly these cues (name -> count) and nothing else since the mark.
+local function expectCues(w, who, since, want, label)
+    w.world:advance(0.3) -- deferred flush and the delayed cash cue
+    local got = cueCounts(plays(w, who, since))
+    local ok = true
+    for n, c in pairs(want) do if got[n] ~= c then ok = false end end
+    for n in pairs(got) do if not want[n] then ok = false end end
+    check(ok, label .. ": expected " .. cueText(want) .. ", got " .. cueText(got))
+end
+local function patchText(from, to)
+    return function(text)
+        local s, e = string.find(text, from, 1, true)
+        assert(s, "config patch failed: " .. from)
+        return string.sub(text, 1, s - 1) .. to .. string.sub(text, e + 1)
+    end
+end
+
+scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty id stays silent", nil, function(mode)
+    check(type(CONFIG.Sounds) == "table", "config has a Sounds table")
+    local names = {"SaleSuccess", "Cash", "UiClick", "StockPlace", "CustomerArrive", "SaleFail", "Negotiate",
+        "Upgrade", "Hire", "Notify", "PermitLapse", "Liquidate"}
+    for _, n in ipairs(names) do
+        local spec = CONFIG.Sounds and CONFIG.Sounds[n]
+        check(type(spec) == "table" and type(spec.Id) == "string" and (spec.Id == "" or string.match(spec.Id, "^rbxassetid://%d+$") ~= nil)
+            and type(spec.Volume) == "number" and spec.Volume > 0 and spec.Volume <= 2,
+            "Sounds." .. n .. " has an rbxassetid (or empty) Id and a Volume in (0, 2]")
+    end
+
+    -- A 400 s registration puts lapses inside the run.
+    local w = setup(mode, {configPatch = patchNumber("PermitPeriodSeconds", 400)})
+    local p = w:addPlayer("Seller1")
+    local s = w:addPlayer("Watcher2")
+    local h = handles(w)
+    local world = w.world
+
+    -- Independent event counts, observed on the server-side attributes.
+    local arrivals, bargains, lapses = 0, 0, 0
+    local wasReady, lastBargain, wasLapsed = false, 0, false
+    p:GetAttributeChangedSignal("K0CustomerReady"):Connect(function()
+        local now = attr(p, "K0CustomerReady") == true
+        if now and not wasReady then arrivals += 1 end
+        wasReady = now
+    end)
+    local function watchBargain()
+        local id = (attr(p, "K0OfferOpen") == true and attr(p, "K0OfferType") == "Bargainer") and attr(p, "K0OfferId") or 0
+        if id ~= 0 and id ~= lastBargain then bargains += 1 end
+        lastBargain = id
+    end
+    p:GetAttributeChangedSignal("K0OfferOpen"):Connect(watchBargain)
+    p:GetAttributeChangedSignal("K0OfferId"):Connect(watchBargain)
+    p:GetAttributeChangedSignal("K0RentDue"):Connect(function()
+        local now = attr(p, "K0RentDue") == true
+        if now and not wasLapsed then lapses += 1 end
+        wasLapsed = now
+    end)
+
+    world:advance(1)
+    check(#plays(w) == 0, "joining plays no cue: " .. cueText(cueCounts(plays(w))))
+
+    local m = playMark(w)
+    go(w, p, h.claim)
+    expectCues(w, "Seller1", m, {Notify = 1}, "claim (notice only)")
+    m = playMark(w)
+    go(w, p, h.permit)
+    expectCues(w, "Seller1", m, {Notify = 1}, "registration (notice only)")
+    m = playMark(w)
+    go(w, p, h[attr(p, "K0DemandSKU")])
+    expectCues(w, "Seller1", m, {StockPlace = 1}, "restock (its notice stays silent)")
+
+    m = playMark(w)
+    check(world:runUntil(function() return attr(p, "K0CustomerReady") == true end, 120), "a customer arrives")
+    world:advance(0.3)
+    local arrive = cueCounts(plays(w, "Seller1", m))
+    check(arrive.CustomerArrive == 1, "arrival plays CustomerArrive once: " .. cueText(arrive))
+
+    -- Answer one offer by accepting (or declining when short) through the HUD.
+    local kind = attr(p, "K0OfferType")
+    local short = stockOf(p, attr(p, "K0OfferSKU")) < attr(p, "K0OfferUnits")
+    m = playMark(w)
+    answerOffer(w, p, h, function() return short and "decline" or "accept" end)
+    local want = {UiClick = 1}
+    if kind == "Bargainer" then want.Negotiate = 1 end
+    if short then want.SaleFail = 1 else want.SaleSuccess = 1; want.Cash = 1 end
+    expectCues(w, "Seller1", m, want, "answering a " .. kind .. (short and " (decline)" or " (accept)"))
+
+    -- A long balanced session that also declines every fourth offer: every cue
+    -- count must equal its event count.
+    local offers = 0
+    local bag = playFor(w, p, h, 1500, {decide = function(pp)
+        offers += 1
+        if offers % 4 == 0 then return "decline" end
+        return defaultDecision(pp)
+    end}, {})
+    world:advance(1)
+    local all = plays(w, "Seller1")
+    local c = cueCounts(all)
+    local function n(x) return c[x] or 0 end
+    local sales = attr(p, "K0Sales")
+    check(n("SaleSuccess") == sales, "SaleSuccess plays once per sale (" .. n("SaleSuccess") .. " vs " .. sales .. ")")
+    check(n("Cash") == sales, "Cash follows every sale (" .. n("Cash") .. " vs " .. sales .. ")")
+    check(n("StockPlace") == attr(p, "K0StockPurchases"), "StockPlace once per purchase (" .. n("StockPlace") .. " vs " .. attr(p, "K0StockPurchases") .. ")")
+    check(n("Liquidate") == (attr(p, "K0Liquidations") or 0), "Liquidate once per liquidation (" .. n("Liquidate") .. " vs " .. tostring(attr(p, "K0Liquidations")) .. ")")
+    check(n("CustomerArrive") == arrivals, "CustomerArrive once per arrival (" .. n("CustomerArrive") .. " vs " .. arrivals .. ")")
+    check(n("Negotiate") == bargains, "Negotiate once per bargainer offer opened (" .. n("Negotiate") .. " vs " .. bargains .. ")")
+    check(n("Upgrade") == ((attr(p, "K0Level") or 1) >= 2 and 1 or 0), "Upgrade once for level 2 (" .. n("Upgrade") .. ")")
+    check(n("Hire") == (attr(p, "K0Hired") and 1 or 0), "Hire once for the cashier (" .. n("Hire") .. ")")
+    check(lapses >= 1 and n("PermitLapse") == lapses, "PermitLapse once per lapse (" .. n("PermitLapse") .. " vs " .. lapses .. ")")
+    local decisions = (attr(p, "K0AcceptCount") or 0) + (attr(p, "K0CounterCount") or 0) + (attr(p, "K0DeclineCount") or 0)
+    check(n("UiClick") == decisions, "UiClick once per decision sent (" .. n("UiClick") .. " vs " .. decisions .. ")")
+    local lost = attr(p, "K0LostSales") or 0
+    check(n("SaleFail") >= 1 and n("SaleFail") <= lost and n("SaleFail") >= lost - lapses, "SaleFail once per lost sale, lapse pauses excepted (" .. n("SaleFail") .. " vs lost " .. lost .. ", lapses " .. lapses .. ")")
+    local together = 0
+    local atTime = {}
+    for _, r in ipairs(all) do
+        local name = cueName(r)
+        atTime[r.t] = atTime[r.t] or {}
+        atTime[r.t][name] = true
+    end
+    for _, set in pairs(atTime) do
+        if set.Notify then
+            for name in pairs(set) do if name ~= "Notify" and name ~= "UiClick" then together += 1 end end
+        end
+        if set.PermitLapse and set.SaleFail then together += 1 end
+    end
+    check(together == 0, "a notice or a lapse never doubles another cue (" .. together .. " overlaps)")
+    local wrong = {}
+    for _, r in ipairs(plays(w)) do
+        local spec = CONFIG.Sounds[cueName(r)]
+        if not spec or r.id ~= spec.Id or r.volume ~= spec.Volume or r.parent ~= "SoundService" then
+            table.insert(wrong, r.name .. "=" .. tostring(r.id) .. "@" .. tostring(r.parent))
+        end
+    end
+    check(#wrong == 0, "every play uses its configured id and volume under SoundService" .. (#wrong > 0 and (": " .. table.concat(wrong, ", ")) or ""))
+    check(#plays(w, "Watcher2") == 0, "the spectator hears nothing (" .. #plays(w, "Watcher2") .. " plays)")
+    note(string.format("20+ min: %d plays, %s", #all, cueText(c)))
+    reportBag(bag)
+
+    -- Handover: the new owner's fresh session is not replayed as events.
+    m = playMark(w)
+    w:removePlayer(p)
+    world:advance(2)
+    local after = cueCounts(plays(w, "Watcher2", m))
+    local extra = 0
+    for name, k in pairs(after) do if name ~= "Notify" or k > 1 then extra += 1 end end
+    check(extra == 0, "handover plays at most one notice cue for the new owner: " .. cueText(after))
+    noScriptErrors(w)
+    noUnexpectedWarnings(w)
+
+    -- Upgrade and cashier, each exactly once and without the notice cue.
+    local w3 = setup(mode, {configPatch = patchNumber("StartingCash", C.PermitFee + C.UpgradeCost + C.HireCost + 150)})
+    local p3 = w3:addPlayer("Seller1")
+    local h3 = handles(w3)
+    go(w3, p3, h3.claim)
+    go(w3, p3, h3.permit)
+    go(w3, p3, h3.orange)
+    m = playMark(w3)
+    go(w3, p3, h3.upgrade)
+    check(attr(p3, "K0Level") == 2, "upgrade bought")
+    expectCues(w3, "Seller1", m, {Upgrade = 1}, "upgrade")
+    m = playMark(w3)
+    go(w3, p3, h3.hire)
+    check(attr(p3, "K0Hired") == true, "cashier hired")
+    expectCues(w3, "Seller1", m, {Hire = 1}, "hire")
+    noScriptErrors(w3)
+
+    -- A lapse that pauses a waiting customer plays PermitLapse, not also SaleFail.
+    local w4 = setup(mode, {configPatch = patchNumber("PermitPeriodSeconds", 60)})
+    local p4 = w4:addPlayer("Seller1")
+    local h4 = handles(w4)
+    local ready4, paused = false, {}
+    p4:GetAttributeChangedSignal("K0RentDue"):Connect(function()
+        if attr(p4, "K0RentDue") == true and ready4 then table.insert(paused, w4.world.now) end
+    end)
+    p4:GetAttributeChangedSignal("K0CustomerReady"):Connect(function() ready4 = attr(p4, "K0CustomerReady") == true end)
+    go(w4, p4, h4.claim)
+    go(w4, p4, h4.permit)
+    go(w4, p4, h4.orange)
+    go(w4, p4, h4.bread)
+    for _ = 1, 6 do
+        if #paused > 0 then break end
+        w4.world:runUntil(function() return attr(p4, "K0RentDue") == true end, 90)
+        w4.world:advance(1)
+        go(w4, p4, h4.permit) -- customers are ignored; renew and wait for the next lapse
+    end
+    w4.world:advance(0.5)
+    check(#paused >= 1, "a lapse caught a waiting customer (" .. #paused .. ")")
+    local doubled = 0
+    for _, at in ipairs(paused) do
+        local set = {}
+        for _, r in ipairs(plays(w4, "Seller1")) do if r.t == at then set[cueName(r)] = true end end
+        if not set.PermitLapse or set.SaleFail then doubled += 1 end
+    end
+    check(doubled == 0, "each such lapse plays PermitLapse alone (" .. doubled .. " wrong)")
+    noScriptErrors(w4)
+
+    -- An empty Id keeps its cue silent and creates no Sound.
+    local stockId = CONFIG.Sounds.StockPlace.Id
+    local w2 = setup(mode, {configPatch = patchText('StockPlace = {Id = "' .. stockId .. '"', 'StockPlace = {Id = ""')})
+    local p2 = w2:addPlayer("Seller1")
+    local h2 = handles(w2)
+    go(w2, p2, h2.claim)
+    go(w2, p2, h2.permit)
+    m = playMark(w2)
+    go(w2, p2, h2.orange)
+    w2.world:advance(0.3)
+    check(attr(p2, "K0StockPurchases") == 1, "restock happened with the cue emptied")
+    check(#plays(w2, "Seller1", m) == 0, "emptied StockPlace plays nothing: " .. cueText(cueCounts(plays(w2, "Seller1", m))))
+    local made = 0
+    for _, inst in ipairs(w2.game:GetService("SoundService"):GetChildren()) do
+        if inst.Name == "K0Sfx_StockPlace" then made += 1 end
+    end
+    check(made == 0, "no Sound instance is created for an empty Id")
+    noScriptErrors(w2)
+end)
+
 ------------------------------------------------------------------ report
 local total, failed = 0, 0
 print("")

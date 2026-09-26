@@ -2,7 +2,7 @@
 -- Production values remain separate from compressed prototype values so playtest
 -- tuning cannot be mistaken for the live economy baseline.
 return {
-    Version = "K0-market-0.4.1",
+    Version = "K0-market-0.4.2",
 
     Production = {
         ShiftSeconds = 2880,
@@ -92,5 +92,29 @@ return {
                 Level2Capacity = 12,
             },
         },
+    },
+
+    -- K0.4.2 ready-made sound cues (ASSET-PROMPTS/06-SFX.md). Every Id is a Roblox
+    -- Creator Store CANDIDATE chosen by title and by measurement only: nobody has
+    -- listened to these yet. The owner approves or replaces each one after
+    -- listening; PRODUCTION/ASSET_PROVENANCE.md holds the source and measurements.
+    -- An empty Id keeps that cue silent. Volume is Sound.Volume (0-10,
+    -- multiplicative; the docs advise staying at or below 2), set from measured
+    -- loudness toward the 06 mix tiers: UiClick/Notify quietest,
+    -- Upgrade/Hire/PermitLapse most prominent.
+    -- Sound never carries information the HUD does not also show.
+    Sounds = {
+        SaleSuccess = {Id = "rbxassetid://17208380755", Volume = 0.42},
+        Cash = {Id = "rbxassetid://9113848943", Volume = 0.53},
+        UiClick = {Id = "rbxassetid://9119976006", Volume = 0.17},
+        StockPlace = {Id = "rbxassetid://9119642626", Volume = 0.54},
+        CustomerArrive = {Id = "rbxassetid://9120896809", Volume = 0.41},
+        SaleFail = {Id = "rbxassetid://17208353912", Volume = 0.27},
+        Negotiate = {Id = "rbxassetid://9119979768", Volume = 0.42},
+        Upgrade = {Id = "rbxassetid://9126236332", Volume = 2.0}, -- quiet file; capped at 2
+        Hire = {Id = "rbxassetid://15675043410", Volume = 0.32},
+        Notify = {Id = "rbxassetid://9119982749", Volume = 0.14},
+        PermitLapse = {Id = "rbxassetid://9125606141", Volume = 0.18},
+        Liquidate = {Id = "rbxassetid://9113579415", Volume = 0.51},
     },
 }
