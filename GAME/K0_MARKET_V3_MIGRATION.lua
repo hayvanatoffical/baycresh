@@ -1,5 +1,5 @@
 -- Run once in Roblox Studio Edit mode on an existing BlackstoneBazaar_K0 scene.
--- Safe to run repeatedly. It adds/updates only the small K0 Market 0.3 world-facing pieces.
+-- Safe to run repeatedly. It adds/updates only the small K0 Market world-facing pieces.
 local scene = workspace:WaitForChild("BlackstoneBazaar_K0")
 local market = scene:WaitForChild("MarketSystem")
 local stall = scene:WaitForChild("Stall_01")
@@ -39,9 +39,26 @@ local function ensureDemandBoard()
         board.CanQuery = false
         board.Parent = market
     end
+    -- MARKET_SYSTEM_BUILD already gives the board a "BoardFace" SurfaceGui on each
+    -- face. Up to K0.4 this migration added its own on top, so every face drew two
+    -- text layers. Only add a face that is missing, and remove the extra copy
+    -- earlier runs left behind.
+    local function otherGuiOnFace(face, except)
+        for _, child in ipairs(board:GetChildren()) do
+            if child ~= except and child:IsA("SurfaceGui") and child.Face == face then return child end
+        end
+        return nil
+    end
     for _, face in ipairs({Enum.NormalId.Front, Enum.NormalId.Back}) do
         local guiName = face == Enum.NormalId.Front and "DemandFront" or "DemandBack"
         local gui = board:FindFirstChild(guiName)
+        if gui and otherGuiOnFace(face, gui) then
+            gui:Destroy()
+            gui = nil
+            print("Baycrest K0 migration removed duplicate DemandBoard text layer:", guiName)
+        elseif not gui and otherGuiOnFace(face, nil) then
+            gui = otherGuiOnFace(face, nil)
+        end
         if not gui then
             gui = Instance.new("SurfaceGui")
             gui.Name = guiName
@@ -83,4 +100,4 @@ if claim then claim.ActionText = "Tezgâhı sahiplen" end
 local sale = interaction.SalePoint:FindFirstChild("SalePrompt")
 if sale then sale.ActionText = "Teklife bak" end
 
-print("Baycrest K0 Market 0.3 migration ready", board:GetFullName())
+print("Baycrest K0 Market migration ready", board:GetFullName())

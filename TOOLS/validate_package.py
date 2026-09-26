@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Static integrity checks for the BAYCREST K0.4 source package.
+"""Static integrity checks for the BAYCREST K0.4.x source package.
 
 This is not a Roblox Studio/Luau runtime test. It verifies package topology,
 version consistency, retired-runtime isolation, local Markdown links, and the
-source-level invariants that K0.4 established after the K0.3 audit.
+source-level invariants that K0.4 established after the K0.3 audit and K0.4.1
+added after the headless-harness findings.
 
-Layer 1 of the double validation. Layer 2 is TOOLS/simulate_k0.py, which runs
-the economy/scenario model instead of inspecting the text.
+Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
+which runs the economy/scenario model instead of inspecting the text. Layer 3
+is TOOLS/run_luau_harness.py, which executes the real Luau sources on a mock
+engine.
 """
 from __future__ import annotations
 
@@ -18,7 +21,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "K0-market-0.4.0"
+EXPECTED_VERSION = "K0-market-0.4.1"
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -67,7 +70,14 @@ required = [
     "PRODUCTION/K0.4_KNOWN_LIMITATIONS.md",
     "PRODUCTION/K0.4_NEXT_TEST_PLAN.md",
     "PRODUCTION/K0.4_ASSET_REQUIREMENTS.md",
+    "PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md",
     "TOOLS/simulate_k0.py",
+    "TOOLS/scenarios_k0.py",
+    "TOOLS/run_luau_harness.py",
+    "TOOLS/luau_harness/README.md",
+    "TOOLS/luau_harness/engine.luau",
+    "TOOLS/luau_harness/k0_world.luau",
+    "TOOLS/luau_harness/k0_scenarios.luau",
     "ASSET-PROMPTS/00-ASSET-PIPELINE.md",
     "ASSET-PROMPTS/01-3D-CHARACTERS.md",
     "ASSET-PROMPTS/02-3D-ENVIRONMENT.md",
@@ -174,6 +184,24 @@ for token, why in [
 if "K0RescueGrants" not in server:
     fail("rescue grants must be published as telemetry so an observer sees them")
 
+# ------------------------------------------ K0.4.1 stranding / dead-end guards
+# The harness proved that paying for an upgrade, a cashier, a wage or a renewal
+# could leave an empty shelf and less cash than one unit of stock, which no
+# customer can ever fix. Every discretionary spend must pass through the guard.
+if "local function wouldStrand" not in server or "minUnitCost" not in server:
+    fail("K0.4.1 stranding guard (wouldStrand/minUnitCost) missing from server")
+for label in ["Raf yükseltmesi", "Kasiyer ücreti", "Maaş"]:
+    if f'strandNotice("{label}"' not in server:
+        fail(f"K0.4.1 stranding guard not applied to: {label}")
+if "wouldStrand(fee)" not in server:
+    fail("permit renewal does not check whether paying the fee strands the stall")
+if "reportDeadEnd" not in server or "dead_end seconds=" not in server:
+    fail("an unrecoverable economy state must be reported (dead_end telemetry line)")
+if "BindToClose" not in server:
+    fail("session summary is not printed on server shutdown (BindToClose)")
+if "task.defer(chooseNextOwner" not in server:
+    fail("owner handover must run after the leaving player is gone (task.defer)")
+
 # ------------------------------------------------------- remote hardening
 if "acceptDecisionCall" not in server or "DecisionRateLimit" not in server:
     fail("RemoteEvent rate limiting missing from server decision handler")
@@ -218,7 +246,7 @@ if unused:
 # ------------------------------------------------- telemetry completeness
 for token in ["K0FirstStockSeconds", "K0FirstOfferSeconds", "K0FirstDecisionSeconds",
               "K0DemandAlignedPurchases", "K0CounterSuccess", "K0WagePayments",
-              "K0Liquidations"]:
+              "K0Liquidations", "K0DeadEndSeconds"]:
     if token not in server:
         fail(f"expected telemetry field missing from server: {token}")
 

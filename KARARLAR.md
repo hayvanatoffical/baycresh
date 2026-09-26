@@ -184,6 +184,7 @@ Bunlar onay engeli değildir. İlgili aşamada ölçülür veya kaynakla doğrul
 | AÇIK-10 | Gelir modelinin gerçek talebi. | K5–K6 | Yönetim |
 | AÇIK-11 | Ev ve işletme iç mekânlarına başkalarının erişim sınırları. | K5 | Tasarım |
 | AÇIK-12 | Dava bildirim penceresinin uzunluğu. | K4 | Tasarım |
+| AÇIK-13 | **K0 talep panosunun ekonomik ağırlığı.** K0.4.1 ölçümünde panoyu izleyen stok politikası izlemeyene göre 20 dakikada anlamlı fark yaratmıyor (gerçek kaynakla 12 tohumda ortalama −2,2 ₡). Seçenekler (değiştirme / talep döngüsünü uzat / talep bonusunu artır / ikisi) ölçüldü, hiçbiri uygulanmadı: `PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md` §4. Prototip config değeridir; 03 §14 baz çizgisini etkilemez. | K0 oyuncu testi öncesi | **Kullanıcı** + Tasarım |
 
 ---
 

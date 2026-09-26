@@ -1,4 +1,4 @@
--- Baycrest K0 Market HUD 0.4
+-- Baycrest K0 Market HUD (version: K0MarketConfig.Version)
 -- Read-only state presentation. All economic decisions are validated by the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,11 +65,14 @@ local title = label(status, "Title", "BAYCREST / K0 PAZAR", 8, 27, 18, accent)
 title.Font = Enum.Font.GothamBold
 local cashLabel = label(status, "Cash", "Kasa", 42, 29, 23, cream)
 local ownershipLabel = label(status, "Ownership", "Tezgâh", 75, 24, 16, cream)
-local permitLabel = label(status, "Permit", "Pazar kaydı", 102, 24, 16, cream)
-local demandLabel = label(status, "Demand", "Talep", 129, 24, 16, good)
-local stockLabel = label(status, "Stock", "Stok", 156, 30, 15, cream)
-local resultLabel = label(status, "Result", "İşletme sonucu", 190, 30, 14, cream)
-local workerLabel = label(status, "Worker", "Kasiyer", 222, 25, 14, cream)
+local permitLabel = label(status, "Permit", "Pazar kaydı", 101, 24, 16, cream)
+local demandLabel = label(status, "Demand", "Talep", 127, 24, 16, good)
+local stockLabel = label(status, "Stock", "Stok", 153, 24, 15, cream)
+-- K0.4 put five figures on one 30 px line; with real numbers it wrapped to two
+-- lines and the second was clipped. Flow and result now have a line each.
+local resultLabel = label(status, "Result", "Satış", 179, 22, 14, cream)
+local profitLabel = label(status, "Profit", "Sonuç", 201, 22, 14, cream)
+local workerLabel = label(status, "Worker", "Kasiyer", 225, 24, 14, cream)
 local goalLabel = label(status, "Goal", "Hedef", 251, 52, 14, accent)
 
 local track = Instance.new("Frame")
@@ -91,10 +94,11 @@ local helpScale = Instance.new("UIScale")
 helpScale.Parent = help
 local helpText = label(help, "HelpText", "Önce tezgâhı sahiplen.", 6, 60, 15, cream)
 
-local toast = frame("Notice", UDim2.fromOffset(510, 66), UDim2.new(0.5, 0, 0, 18), Vector2.new(0.5, 0))
+-- Four lines at 15 px: the longest K0 notice (rescue) needs about four.
+local toast = frame("Notice", UDim2.fromOffset(510, 86), UDim2.new(0.5, 0, 0, 18), Vector2.new(0.5, 0))
 local toastScale = Instance.new("UIScale")
 toastScale.Parent = toast
-local toastText = label(toast, "NoticeText", "", 5, 56, 15, cream)
+local toastText = label(toast, "NoticeText", "", 5, 76, 15, cream)
 toast.Visible = false
 
 local offer = frame("Offer", UDim2.fromOffset(490, 244), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
@@ -168,10 +172,15 @@ local function updateScale()
     end
 end
 updateScale()
-if Workspace.CurrentCamera then
-    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+local viewportConnection = nil
+local function watchCamera()
+    if viewportConnection then viewportConnection:Disconnect() end
+    local camera = Workspace.CurrentCamera
+    viewportConnection = camera and camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale) or nil
+    updateScale()
 end
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(updateScale)
+watchCamera()
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
 
 local function send(action)
     if not offer.Visible then return end
@@ -204,6 +213,7 @@ local function render()
         demandLabel.Text = ""
         stockLabel.Text = ""
         resultLabel.Text = ""
+        profitLabel.Text = ""
         workerLabel.Text = ""
         goalLabel.Text = ""
         offer.Visible = false
@@ -227,6 +237,8 @@ local function render()
     local demandSKU = player:GetAttribute("K0DemandSKU") or "orange"
     local demandRemaining = player:GetAttribute("K0DemandRemaining") or 0
     local demandBonus = player:GetAttribute("K0DemandBonusPercent") or 0
+    local rescues = player:GetAttribute("K0RescueGrants") or 0
+    local deadEnd = (player:GetAttribute("K0DeadEndSeconds") or -1) >= 0
 
     cashLabel.Text = "Kasa  " .. cash .. " ₡"
     ownershipLabel.Text = claimed and ("Benim tezgâhım / Seviye " .. level) or "Sahiplik: henüz yok"
@@ -241,7 +253,9 @@ local function render()
     end
     demandLabel.Text = "Talep  " .. productName(demandSKU) .. "  +" .. demandBonus .. "%  /  " .. demandRemaining .. " sn"
     stockLabel.Text = "Portakal " .. orange .. " kg  |  Ekmek " .. bread .. " adet"
-    resultLabel.Text = "Satış " .. sold .. "  |  Ciro " .. revenue .. " ₡  |  Gider " .. operatingCost .. " ₡  |  Sonuç " .. operatingResult .. " ₡  |  Yatırım " .. investment .. " ₡"
+    resultLabel.Text = "Satış " .. sold .. "  |  Ciro " .. revenue .. " ₡  |  Gider " .. operatingCost .. " ₡"
+    profitLabel.Text = "Sonuç " .. operatingResult .. " ₡  |  Yatırım " .. investment .. " ₡"
+    profitLabel.TextColor3 = operatingResult < 0 and accent or cream
     workerLabel.Text = hired and (due and ("Kasiyer: " .. C.WagePerShift .. " ₡ maaş bekliyor") or ("Kasiyer: " .. (player:GetAttribute("K0ShiftRemaining") or 0) .. " sn")) or "Kasiyer: yok"
 
     local cost = player:GetAttribute("K0UpgradeCost") or C.UpgradeCost
@@ -253,14 +267,21 @@ local function render()
     elseif not permit then
         goalLabel.Text = "2 / Pazar Yönetimi'nde " .. C.PermitFee .. " ₡ kayıt yap."
         helpText.Text = "Sahiplik sende. Satış açmak için soldaki yönetim panosunda kaydı tamamla."
+    elseif deadEnd then
+        goalLabel.Text = "Ekonomik çıkmaz: kasa ve stok ticarete dönmeye yetmiyor."
+        helpText.Text = "Bu oturumda kurtarma hakkı kullanıldı. Gözlemci çıkmaz anını kayda geçirsin; oturumun kalanı ekonomi ölçümü sayılmaz."
     elseif permitDue then
         goalLabel.Text = "Pazar kaydı bitti; ticaret geçici olarak durdu."
-        if cash >= C.PermitFee then
+        local minUnit = math.min(math.floor(C.Products.orange.WholesaleCost / C.Products.orange.WholesaleBundle),
+            math.floor(C.Products.bread.WholesaleCost / C.Products.bread.WholesaleBundle))
+        if cash >= C.PermitFee and (orange + bread > 0 or cash >= C.PermitFee + minUnit) then
             helpText.Text = "Pazar Yönetimi'nde " .. C.PermitFee .. " ₡ yenile. Tezgâh ve stok sende kalır; yalnız ticaret bekler."
         elseif orange + bread > 0 then
             helpText.Text = "Kasan " .. C.PermitFee .. " ₡ kaydı karşılamıyor. Toptancıda stoğunu zararına tasfiye edip kaydı yenileyebilirsin: bu bir karar, çıkmaz değil."
+        elseif rescues < (C.RescueGrantLimit or 1) then
+            helpText.Text = "Kasan kaydı ve yeni stoğu birlikte karşılamıyor, tasfiye edilecek stok yok. Pazar Yönetimi bu oturumda bir kez kaydı ücretsiz yeniler; gözlemci bunu kayda geçirsin."
         else
-            helpText.Text = "Kasan yetmiyor ve tasfiye edilecek stok yok. Pazar Yönetimi bu oturumda bir kez kurtarma yenilemesi yapar; gözlemci bunu kayda geçirsin."
+            helpText.Text = "Kasan kaydı karşılamıyor ve bu oturumdaki kurtarma hakkı kullanıldı."
         end
     elseif orange + bread == 0 then
         goalLabel.Text = "3 / Talebe göre ilk stok kararını ver."
@@ -305,10 +326,14 @@ local function render()
     local serial = player:GetAttribute("K0NoticeSerial")
     if serial and serial ~= lastNotice then
         lastNotice = serial
-        toastText.Text = player:GetAttribute("K0Notice") or ""
+        local text = player:GetAttribute("K0Notice") or ""
+        toastText.Text = text
         toast.Visible = true
         local current = serial
-        task.delay(4, function()
+        -- K0.4 hid every notice after 4 s, including the 200-character rescue
+        -- note. Reading time now grows with length (estimate, not device-tested).
+        local seconds = math.clamp(2.5 + (utf8.len(text) or #text) / 20, 4, 10)
+        task.delay(seconds, function()
             if lastNotice == current then toast.Visible = false end
         end)
     end
@@ -322,7 +347,7 @@ local attributes = {
     "K0OfferOpen", "K0OfferId", "K0OfferSKU", "K0OfferUnits", "K0OfferAsk", "K0OfferBid",
     "K0OfferCounter", "K0OfferType", "K0OfferSignal", "K0NoticeSerial", "K0SessionSeconds",
     "K0TargetSessionSeconds", "K0SessionTargetReached",
-    "K0Liquidations", "K0LiquidationRevenue", "K0RescueGrants",
+    "K0Liquidations", "K0LiquidationRevenue", "K0RescueGrants", "K0DeadEndSeconds",
 }
 for _, name in ipairs(attributes) do player:GetAttributeChangedSignal(name):Connect(render) end
 render()

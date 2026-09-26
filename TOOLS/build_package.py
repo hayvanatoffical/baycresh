@@ -4,7 +4,9 @@
 SHA-256 manifestini yeniden uretir, surum ZIP'ini olusturur, butunlugunu
 dogrular ve ZIP'ten cikarilan kopyada her iki dogrulama katmanini yeniden
 calistirir. Boylece "ZIP icindeki paket gecerli mi" sorusu, depodaki calisma
-kopyasindan bagimsiz olarak cevaplanir.
+kopyasindan bagimsiz olarak cevaplanir. Luau CLI bulunursa katman 3 (gercek
+kaynagi sahte motorda kosturan harness) de iki kopyada calisir; bulunmazsa
+atlandigi acikca yazilir.
 
 K0.3 FINAL veya baska bir surum ZIP'inin uzerine YAZMAZ: hedef dosya varsa
 islem durur.
@@ -29,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "PRODUCTION/PACKAGE_MANIFEST_SHA256.txt"
 TOP = "BAYCREST"
 EXCLUDE_DIRS = {".git", "__pycache__", ".pytest_cache"}
-EXCLUDE_NAMES = {".DS_Store"}
+EXCLUDE_NAMES = {".DS_Store", "_bundle.luau"}
 
 
 def package_files() -> list[Path]:
@@ -83,14 +85,31 @@ def run(cmd: list[str], cwd: Path) -> tuple[int, str]:
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
+TOOLS_TO_RUN = ("TOOLS/validate_package.py", "TOOLS/scenarios_k0.py", "TOOLS/run_luau_harness.py")
+SKIP_CODE = 2  # run_luau_harness.py: Luau CLI yok
+
+
+def validate(where: Path, prefix: str) -> None:
+    for tool in TOOLS_TO_RUN:
+        code, txt = run([sys.executable, tool], where)
+        if tool.endswith("run_luau_harness.py") and code == SKIP_CODE:
+            print(f"  {prefix}{tool}: ATLANDI (Luau CLI yok) — katman 3 bu pakette kosturulmadi")
+            continue
+        print(f"  {prefix}{tool}: {'PASS' if code == 0 else 'FAIL'}")
+        if code != 0:
+            print(txt)
+            raise SystemExit(f"DURDU — {prefix or 'paketleme oncesi '}dogrulama basarisiz")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=None)
     args = ap.parse_args()
 
     ver = version()
-    # K0-market-0.4.0 -> K0.4
-    short = "K0." + ver.rsplit("-", 1)[-1].split(".")[1]
+    # K0-market-0.4.0 -> K0.4, K0-market-0.4.1 -> K0.4.1
+    _major, minor, patch = ver.rsplit("-", 1)[-1].split(".")
+    short = f"K0.{minor}" + (f".{patch}" if patch != "0" else "")
     out = args.out or (ROOT / "dist" / f"BAYCREST-{short}-PROTOTYPE.zip")
 
     print(f"Surum: {ver}  (paket adi {short})")
@@ -105,12 +124,7 @@ def main() -> int:
     print(f"Manifest yenilendi: {n} dosya kaydi")
 
     # 2. dogrulama (calisma kopyasi)
-    for tool in ("TOOLS/validate_package.py", "TOOLS/scenarios_k0.py"):
-        code, txt = run([sys.executable, tool], ROOT)
-        print(f"  {tool}: {'PASS' if code == 0 else 'FAIL'}")
-        if code != 0:
-            print(txt)
-            raise SystemExit("DURDU — paketleme oncesi dogrulama basarisiz")
+    validate(ROOT, "")
 
     # 3. zip
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -152,13 +166,8 @@ def main() -> int:
             raise SystemExit(f"DURDU — manifest dogrulamasi basarisiz ({len(mismatches)})")
         print(f"Manifest dogrulandi: {checked} dosya, sapma yok")
 
-        # 6. cikarilan kopyada iki katmani yeniden calistir
-        for tool in ("TOOLS/validate_package.py", "TOOLS/scenarios_k0.py"):
-            code, txt = run([sys.executable, tool], extracted)
-            print(f"  ZIP icinde {tool}: {'PASS' if code == 0 else 'FAIL'}")
-            if code != 0:
-                print(txt)
-                raise SystemExit("DURDU — ZIP icindeki paket dogrulamadan gecmedi")
+        # 6. cikarilan kopyada dogrulama katmanlarini yeniden calistir
+        validate(extracted, "ZIP icinde ")
 
     print(f"\nTAMAM — {out.name} uretildi ve dogrulandi.")
     print("Bu dosya hicbir onceki surumun uzerine yazilmadi.")

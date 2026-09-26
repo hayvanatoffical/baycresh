@@ -1,5 +1,21 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 26 Eylül 2026 — K0.4.1: kaynağın çalıştırılarak denetlenmesi
+
+K0.4 kaynağı bu kez okunarak veya modellenerek değil, **çalıştırılarak** denetlendi. Roblox Studio erişimi olmadığı için gerçek sahne kurucularını, migration'ı ve K0 runtime'ını sahte bir motorda, sanal saatle ve oyuncu gibi davranarak çalıştıran başsız bir harness kuruldu. Yeni oyun özelliği eklenmedi; fiyat, kapasite ve oranlar değişmedi. Ayrıntı: [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md).
+
+- **Kurtarma kasayı sıfırlıyordu (kritik).** K0.4 kurtarması kaydı "mevcut kasayla" yeniliyor ve kasayı 0 ₡'ye indiriyordu. Rafı boş oyuncu stok alamıyor, müşteri gelmiyordu: çıkmazı önlemek için eklenen güvenlik ağı çıkmazı üretiyordu. Artık kayıt ücreti siliniyor; oturum başına sınır ve telemetri korundu.
+- **Stoksuz harcama çıkmazı giderildi.** Yükseltme, kasiyer, maaş ve yenileme, rafı boş oyuncuyu bir birimin (6 ₡) altında bırakabiliyordu. Ortak koruma ödemeyi reddediyor ve oyuncuya önce stok almasını söylüyor.
+- **Sahip devri düzeltildi.** Sahip ayrılınca tezgâh ayrılan oyuncuya geri verilebiliyor, kalan oyuncular izleyici kalıyordu. Devir artık ayrılan oyuncuyu atlıyor. Gerçek motor sırası iki oyunculu Studio testiyle doğrulanacak.
+- **Çıkmaz görünür kılındı.** Kurtarma harcandıktan sonra oluşabilecek kalıcı çıkmaz bir kez `dead_end` satırıyla, `K0DeadEndSeconds` attribute'uyla ve özet satırındaki `deadEnd=` alanıyla raporlanıyor. Studio'da Stop'a basınca da `summary reason=server_close` yazılıyor.
+- **Migration, HUD ve NPC.** Migration talep panosuna ikinci metin katmanı eklemiyor. HUD sonuç satırı iki satıra bölündü, bildirim kutusu büyüdü. NPC parçaları köke weld'lendi ve yalnız kök hareket ediyor; harness'teki parça yazımı 20 dakikada 382 227'den 81 276'ya indi (cihaz etkisi ölçülmedi). Dekoratif yayalar artık müşteri sayacına girmiyor; tabela fiyatları config'ten yazılıyor.
+- **Doğrulama aracı düzeltildi.** Python modeli müşterileri anlık geliyor sayıyordu ve akışı ~2 kat iyimser ölçüyordu: 20 dakikada 55 satış, gerçek kaynakla ölçülen 25. Model kaynaktaki sıralı müşteri döngüsüne göre düzeltildi. K0.4 raporlarına düzeltme notu eklendi; K0.4'ün karşılaştırmalı sonuçları yön olarak geçerli kaldı.
+- **Açık tasarım bulgusu (sahip kararı).** Talep panosunu izlemek şu ayarla ekonomide ödüllendirilmiyor. K0.4 bunu tek tohumla ölçüp geçmişti; çok tohumla geri çekildi. Seçenekler ölçüldü, hiçbiri uygulanmadı: `KARARLAR.md` AÇIK-13.
+- **Üçüncü doğrulama katmanı.** `TOOLS/run_luau_harness.py` ve `TOOLS/luau_harness/` (16 senaryo, iki sinyal modu). Aynı harness eski K0.4.0 kaynağında 26 çalıştırmanın 10'unda düşüyor, K0.4.1'de 26/26 geçiyor. Sonuç: statik PASS, senaryo 19/20 + 1 açık tasarım bulgusu, harness 26/26 PASS.
+- **Durum:** `SOURCE VERIFIED` · `STATIC VERIFIED` · `SCENARIO VERIFIED` · `HARNESS VERIFIED` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Harness Roblox Studio değildir. Plan: [`PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](PRODUCTION/K0.4_NEXT_TEST_PLAN.md) (Aşama 2d eklendi).
+
+---
+
 ## 26 Eylül 2026 — K0.4 prototip sertleştirmesi
 
 K0.3 kaynak paketi bağımsız olarak denetlendi. **İki oyun-durduran hata** bulundu, ölçülerek kanıtlandı ve giderildi. Yeni oyun özelliği eklenmedi; K0 kapsamı büyütülmedi. Ayrıntı: [`PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md`](PRODUCTION/K0.4_IMPLEMENTATION_REPORT.md).

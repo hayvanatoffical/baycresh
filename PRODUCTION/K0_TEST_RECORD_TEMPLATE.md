@@ -1,6 +1,6 @@
 # K0 test kaydı — doldurulacak şablon
 
-**Kaynak hedefi:** `K0-market-0.4.0`  
+**Kaynak hedefi:** `K0-market-0.4.1`  
 **Durum:** Şablon; yapılmış test veya oyuncu sonucu içermez. Her test sürümü için ayrı kopya oluşturulur. Kapı kararı `EKIP/07-YOL-HARITASI.md` §2'ye dayanır.
 
 > K0.3 kontrollü oynanış RNG seed'i kullanır ve her test sahibi atandığında aynı ekonomi dizisini baştan başlatır. Dekoratif kalabalık RNG'si ayrıdır. Katılımcıya 20 dakikalık geri sayım gösterilmez; süre dolduğunda oyun durmaz. Böylece “süre bitince kendiliğinden devam” davranışı daha az yönlendirilir.
@@ -8,7 +8,7 @@
 | Alan | Kayıt |
 |---|---|
 | Build / place adı ve ID | TBD |
-| Kaynak sürümü / commit | `K0-market-0.4.0` / TBD |
+| Kaynak sürümü / commit | `K0-market-0.4.1` / TBD |
 | Test tarihi ve saat dilimi | TBD |
 | Test edilen değişiklikler | TBD |
 | Cihaz / giriş yöntemi | TBD |
@@ -45,6 +45,7 @@
 | Pazar kaydı yenileme — `K0PermitRenewals` (20 dk sonrası devamda görülebilir) | Ölçülmedi | Ölçülmedi | Ölçülmedi |
 | Maaş ödeme — `K0WagePayments` | Ölçülmedi | Ölçülmedi | Ölçülmedi |
 | 20 dk hedefi — `K0SessionTargetReached` | Ölçülmedi | Ölçülmedi | Ölçülmedi |
+| Ekonomi çıkmazı — `K0DeadEndSeconds` (−1 = yok) | Ölçülmedi | Ölçülmedi | Ölçülmedi |
 
 Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özellikle “talebe uygun stok” ve pazarlık sayıları, oyuncunun neden o kararı verdiği sorusuyla birlikte yorumlanır.
 
@@ -63,13 +64,17 @@ Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özell
 - Sahiplen → kayıt → stok → teklif → karar → satış: **ölçülmedi** — kanıt yeri:
 - Seviye 2 → kasiyer → maaş: **ölçülmedi** — kanıt yeri:
 - Pazar kaydı bitişi → ticaret duruşu → yenileme: **ayrı smoke; 20 dk K0 kapısının dışında** — kanıt yeri:
-- Owner ayrılışı → yeni owner devri / hata yok: **ölçülmedi** — kanıt yeri:
+- Owner ayrılışı → yeni owner devri / hata yok (**K0.4.1:** iki oyunculu testte ikinci oyuncu sahip oldu mu): **ölçülmedi** — kanıt yeri:
 - 20. dakikada `[Baycrest K0] summary reason=target_20m ...`: **ölçülmedi** — kanıt yeri:
+- **K0.4.1 · son özet:** oturum sonunda tek `summary reason=owner_left` veya `reason=server_close` satırı: **ölçülmedi** — kanıt yeri:
 - Konsol hata/warn kaydı: **ölçülmedi** — kanıt yeri:
 - **K0.4 · raf yenileme:** rafta 1 birim kalınca toptancıdan alım yapılabildi mi (kısmi alım bildirimi): **ölçülmedi** — kanıt yeri:
 - **K0.4 · tasfiye:** kayıt borcu varken toptancı `Tasfiye et` moduna geçti mi: **ölçülmedi** — kanıt yeri:
 - **K0.4 · `liquidations=` sayacı:** özet satırından değer: **ölçülmedi**
 - **K0.4 · `rescueGrants=` sayacı:** özet satırından değer: **ölçülmedi** — *sıfırdan büyükse bu oturum ekonomi dengesi açısından şüphelidir, sebebi yazılır:*
+- **K0.4.1 · `deadEnd=` alanı ve `dead_end` satırı:** özet satırından değer: **ölçülmedi** — *−1 değilse oturum o saniyede kalıcı çıkmaza girmiştir; bu bir hatadır, sebebi ve `reason=` değeri yazılır:*
+- **K0.4.1 · stoksuz harcama reddi:** "kasada N ₡ kalır ve rafta ürün yok" bildirimi görüldü mü, oyuncu anladı mı: **ölçülmedi** — kanıt yeri:
+- **K0.4.1 · NPC hareketi:** müşteri ve yayalar tek parça hâlinde yürüyor mu (dağılan/düşen parça yok): **ölçülmedi** — kanıt yeri:
 - Android FPS / bellek / dokunmatik: **ölçülmedi** — cihaz ve sahne:
 - Veri kaydı/geri dönüş: **K1 kapsamı; K0'da beklenmez**.
 

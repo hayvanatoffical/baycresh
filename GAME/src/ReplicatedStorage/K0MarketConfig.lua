@@ -2,7 +2,7 @@
 -- Production values remain separate from compressed prototype values so playtest
 -- tuning cannot be mistaken for the live economy baseline.
 return {
-    Version = "K0-market-0.4.0",
+    Version = "K0-market-0.4.1",
 
     Production = {
         ShiftSeconds = 2880,

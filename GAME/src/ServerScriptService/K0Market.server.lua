@@ -1,4 +1,4 @@
--- Baycrest K0 Market 0.3
+-- Baycrest K0 Market (version: K0MarketConfig.Version)
 -- Server-authoritative ownership, permit, stock, offers, demand, upgrade and wages.
 -- This script is the only active K0 server runtime. Legacy K0Game is archived in GAME/legacy.
 local Players = game:GetService("Players")
@@ -10,6 +10,14 @@ local Config = require(ReplicatedStorage:WaitForChild("K0MarketConfig"))
 local C = Config.Prototype
 local economyRng = Random.new(C.PlaytestSeed or 260926)
 local cosmeticRng = Random.new()
+
+-- Working-capital floor: the cheapest single unit at the wholesaler. With an
+-- empty shelf no customer is spawned, so cash below this ends the economy for the
+-- session. K0.4.1 refuses any non-stock payment that would create that state.
+local minUnitCost = math.huge
+for _, product in pairs(C.Products) do
+    minUnitCost = math.min(minUnitCost, math.floor(product.WholesaleCost / product.WholesaleBundle))
+end
 
 local scene = workspace:WaitForChild("BlackstoneBazaar_K0")
 
@@ -71,6 +79,7 @@ local owner = nil
 local worker = nil
 local visitor = nil
 local crowdCount = 0
+local crowdSerial = 0
 local noticeSerial = 0
 local offerSerial = 0
 
@@ -123,7 +132,9 @@ local function resetState()
     state.liquidations = 0
     state.liquidationRevenue = 0
     state.rescueGrants = 0
+    state.deadEndSeconds = -1
     state.targetSummaryPrinted = false
+    state.finalSummaryPrinted = false
     -- A fixed opening condition makes the three K0 playtests comparable.
     state.demandSKU = economyRng:NextInteger(1, 2) == 1 and "orange" or "bread"
     state.demandRemaining = C.DemandCycleSeconds
@@ -170,6 +181,46 @@ local function notice(message)
     noticeSerial += 1
     owner:SetAttribute("K0Notice", message)
     owner:SetAttribute("K0NoticeSerial", noticeSerial)
+end
+
+local function totalStock()
+    return state.stock.orange + state.stock.bread
+end
+
+-- True when paying `cost` would leave an empty shelf and less than one unit's
+-- cash. K0.4 allowed it for the upgrade, the cashier, the wage and the renewal;
+-- the headless harness reached each case and the session could not recover.
+local function wouldStrand(cost)
+    return totalStock() == 0 and state.cash - cost < minUnitCost
+end
+
+local function strandNotice(what, cost)
+    local step = state.permitDue and "Önce Pazar Yönetimi'nde kaydı yenile, sonra stok al." or ("Önce toptancıdan en az 1 birim stok al (" .. minUnitCost .. " ₡).")
+    notice(what .. " şimdi ödenirse kasada " .. (state.cash - cost) .. " ₡ kalır ve rafta ürün yok; stoksuz tezgâha müşteri gelmez. " .. step)
+end
+
+-- A state no player action can leave. The guards above should make it
+-- unreachable inside the rescue limit; if it happens anyway it is reported once
+-- so an observer never mistakes a stalled session for a slow one.
+local function economyDeadEnd()
+    if not (owner and state.claimed and state.permit) or totalStock() > 0 then return nil end
+    if state.permitDue then
+        if state.cash >= C.PermitFee + minUnitCost then return nil end
+        if state.rescueGrants < (C.RescueGrantLimit or 1) then return nil end
+        return "renewal_unaffordable"
+    end
+    if state.cash < minUnitCost then return "empty_shelf_no_cash" end
+    return nil
+end
+
+local function reportDeadEnd()
+    if state.deadEndSeconds >= 0 then return end
+    local reason = economyDeadEnd()
+    if not reason then return end
+    state.deadEndSeconds = elapsedSeconds()
+    print(string.format("[Baycrest K0] dead_end seconds=%d reason=%s cash=%d rescueGrants=%d",
+        state.deadEndSeconds, reason, state.cash, state.rescueGrants))
+    notice("Bu oturumda ekonomik çıkmaz oluştu: kasa " .. state.cash .. " ₡, stok yok, kurtarma hakkı kalmadı. Gözlemci bunu kayda geçirsin.")
 end
 
 local function setDemandBoardText(text)
@@ -276,6 +327,10 @@ local function updateWorldState()
     setBoardDetail(market:FindFirstChild("PermitOffice"), "PAZAR KAYDI " .. C.PermitFee .. " ₡")
     setBoardDetail(market:FindFirstChild("OrangeWholesale"), C.Products.orange.WholesaleBundle .. " " .. C.Products.orange.Unit .. "  /  " .. C.Products.orange.WholesaleCost .. " ₡")
     setBoardDetail(market:FindFirstChild("BreadWholesale"), C.Products.bread.WholesaleBundle .. " " .. C.Products.bread.Unit .. "  /  " .. C.Products.bread.WholesaleCost .. " ₡")
+    -- The builders print fixed prices on these boards; the runtime owns the numbers.
+    setBoardDetail(interaction:FindFirstChild("UpgradeBoard"), C.UpgradeCost .. " ₡ / DAHA ÇOK STOK")
+    setBoardDetail(interaction:FindFirstChild("HireBoard"), C.HireCost .. " ₡ / OTOMATİK SATIŞ")
+    setBoardDetail(interaction:FindFirstChild("PayBoard"), C.WagePerShift .. " ₡ / VARDİYA")
     setPriceTag(displays:FindFirstChild("OrangePrice"), "orange")
     setPriceTag(displays:FindFirstChild("BreadPrice"), "bread")
 end
@@ -335,6 +390,7 @@ local function sync()
         owner:SetAttribute("K0Liquidations", state.liquidations)
         owner:SetAttribute("K0LiquidationRevenue", state.liquidationRevenue)
         owner:SetAttribute("K0RescueGrants", state.rescueGrants)
+        owner:SetAttribute("K0DeadEndSeconds", state.deadEndSeconds)
         owner:SetAttribute("K0TargetSessionSeconds", C.TargetSessionSeconds)
         owner:SetAttribute("K0SessionTargetReached", elapsedSeconds() >= C.TargetSessionSeconds)
 
@@ -392,6 +448,17 @@ local function makeNpc(name, position, style)
         npcPart(model, "Tote", Vector3.new(0.78, 0.82, 0.15), Vector3.new(-1.15, -0.72, -0.2), Color3.fromRGB(206, 192, 155), position)
         npcPart(model, "ToteHandle", Vector3.new(0.13, 0.55, 0.16), Vector3.new(-1.15, -0.16, -0.2), Color3.fromRGB(181, 166, 135), position)
     end
+    -- One anchored root carries the whole figure (see moveNpc).
+    for _, part in ipairs(model:GetChildren()) do
+        if part:IsA("BasePart") and part ~= root then
+            part.Anchored = false
+            part.Massless = true
+            local weld = Instance.new("WeldConstraint")
+            weld.Part0 = root
+            weld.Part1 = part
+            weld.Parent = part
+        end
+    end
     model.Parent = scene
     return model
 end
@@ -425,18 +492,19 @@ local function bubble(model, message)
     gui.Line.Text = message
 end
 
+-- K0.4 tweened a CFrameValue and re-pivoted every anchored part of the figure
+-- (up to 17) on each step, so each part's CFrame was written and replicated
+-- separately. The parts are welded to one anchored root now and only the root
+-- is tweened. The harness counts the drop in writes; the device and network
+-- effect is not measured yet.
 local function moveNpc(model, from, to, duration)
     if not model or not model.Parent then return end
-    local value = Instance.new("CFrameValue")
-    value.Value = CFrame.new(from)
-    local connection = value.Changed:Connect(function(cf)
-        if model and model.Parent then model:PivotTo(cf) end
-    end)
-    local tween = TweenService:Create(value, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Value = CFrame.new(to)})
+    local root = model.PrimaryPart
+    if not root then return end
+    root.CFrame = CFrame.new(from)
+    local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = CFrame.new(to)})
     tween:Play()
     tween.Completed:Wait()
-    connection:Disconnect()
-    value:Destroy()
 end
 
 local function feedback(price, sku)
@@ -606,22 +674,29 @@ permitPrompt.Triggered:Connect(function(player)
 
     local fee = C.PermitFee
     local rescued = false
-    if state.cash < fee then
-        -- Last-resort guard rail: only when the player cannot pay AND has no stock
-        -- left to liquidate. Bounded per session and written to telemetry so an
-        -- observer sees that the economy needed rescuing instead of it passing
-        -- silently. This is a prototype measurement aid, not a production rule.
-        local canLiquidate = state.stock.orange > 0 or state.stock.bread > 0
-        if canLiquidate then
+    if state.cash < fee or wouldStrand(fee) then
+        -- Last-resort guard rail: only when the player cannot pay, or paying would
+        -- leave an empty shelf and less than one unit's cash, AND no stock is left
+        -- to liquidate. K0.4 charged all remaining cash here, which produced
+        -- exactly the stranded state it was meant to prevent; K0.4.1 waives the
+        -- fee instead. Bounded per session and written to telemetry so an observer
+        -- sees that the economy needed rescuing. A prototype measurement aid, not
+        -- a production rule.
+        if totalStock() > 0 then
             notice("Pazar kaydı için " .. (fee - state.cash) .. " ₡ eksik. Toptancıda stoğunu tasfiye edebilirsin.")
             return
         end
         if state.rescueGrants >= (C.RescueGrantLimit or 1) then
-            notice("Pazar kaydı için " .. (fee - state.cash) .. " ₡ eksik ve tasfiye edilecek stok yok. Bu oturumda kurtarma hakkı kalmadı.")
+            if state.cash < fee then
+                notice("Pazar kaydı için " .. (fee - state.cash) .. " ₡ eksik ve tasfiye edilecek stok yok. Bu oturumda kurtarma hakkı kalmadı.")
+            else
+                strandNotice("Kayıt ücreti", fee)
+            end
+            reportDeadEnd()
             return
         end
         state.rescueGrants += 1
-        fee = state.cash
+        fee = 0
         rescued = true
     end
 
@@ -634,8 +709,8 @@ permitPrompt.Triggered:Connect(function(player)
     state.permitRemaining = C.PermitPeriodSeconds
     sync()
     if rescued then
-        notice("KURTARMA: kasan yetmediği ve tasfiye edilecek stok kalmadığı için kayıt " .. fee .. " ₡ ile yenilendi. Bu bir prototip güvenlik ağıdır; gözlemci bunu kayda geçirsin.")
-        print(string.format("[Baycrest K0] rescue_grant seconds=%d cash=%d", elapsedSeconds(), state.cash))
+        notice("KURTARMA: kasan kaydı ve yeni stoğu birlikte karşılamıyor, tasfiye edilecek stok da yok. Kayıt bu seferlik ücretsiz yenilendi; kasan " .. state.cash .. " ₡ ile stok alabilirsin. Gözlemci bunu kayda geçirsin.")
+        print(string.format("[Baycrest K0] rescue_grant seconds=%d cash=%d waived=%d", elapsedSeconds(), state.cash, C.PermitFee))
     else
         notice("Pazar kaydı aktif. Talep panosuna bak ve toptancıdan ilk stok kararını ver.")
     end
@@ -810,6 +885,10 @@ upgradePrompt.Triggered:Connect(function(player)
         notice("Raflar için " .. (C.UpgradeCost - state.cash) .. " ₡ eksik.")
         return
     end
+    if wouldStrand(C.UpgradeCost) then
+        strandNotice("Raf yükseltmesi", C.UpgradeCost)
+        return
+    end
     state.cash -= C.UpgradeCost
     state.upgradeSpent += C.UpgradeCost
     state.level = 2
@@ -823,6 +902,10 @@ hirePrompt.Triggered:Connect(function(player)
     if not guard(player, interaction.HireBoard) or not commerceActive() or state.level < 2 or state.hired then return end
     if state.cash < C.HireCost then
         notice("Kasiyer için " .. (C.HireCost - state.cash) .. " ₡ eksik.")
+        return
+    end
+    if wouldStrand(C.HireCost) then
+        strandNotice("Kasiyer ücreti", C.HireCost)
         return
     end
     state.cash -= C.HireCost
@@ -842,6 +925,10 @@ payPrompt.Triggered:Connect(function(player)
         notice("Maaşa " .. (C.WagePerShift - state.cash) .. " ₡ eksik.")
         return
     end
+    if wouldStrand(C.WagePerShift) then
+        strandNotice("Maaş", C.WagePerShift)
+        return
+    end
     state.cash -= C.WagePerShift
     state.wagesSpent += C.WagePerShift
     state.wagePayments += 1
@@ -851,18 +938,24 @@ payPrompt.Triggered:Connect(function(player)
     notice("Kasiyer maaşı ödendi: -" .. C.WagePerShift .. " ₡.")
 end)
 
-local function printSessionSummary(reason)
+-- `final` summaries (owner left, server closing) print once per session; the
+-- target_20m line is a mid-session snapshot and does not count.
+local function printSessionSummary(reason, final)
     if not owner then return end
+    if final then
+        if state.finalSummaryPrinted then return end
+        state.finalSummaryPrinted = true
+    end
     local seconds = elapsedSeconds()
     print(string.format(
-        "[Baycrest K0] summary reason=%s seconds=%d claim=%d stock=%d offer=%d decision=%d sale=%d upgrade=%d hire=%d sales=%d revenue=%d operatingCost=%d operatingResult=%d lostSales=%d stockPurchases=%d demandAligned=%d accept=%d counter=%d counterSuccess=%d counterFailure=%d decline=%d renewals=%d wagePayments=%d liquidations=%d rescueGrants=%d",
+        "[Baycrest K0] summary reason=%s seconds=%d claim=%d stock=%d offer=%d decision=%d sale=%d upgrade=%d hire=%d sales=%d revenue=%d operatingCost=%d operatingResult=%d lostSales=%d stockPurchases=%d demandAligned=%d accept=%d counter=%d counterSuccess=%d counterFailure=%d decline=%d renewals=%d wagePayments=%d liquidations=%d rescueGrants=%d deadEnd=%d cash=%d",
         reason, seconds, state.firstClaimSeconds, state.firstStockSeconds, state.firstOfferSeconds, state.firstDecisionSeconds,
         state.firstSaleSeconds, state.firstUpgradeSeconds, state.firstHireSeconds, state.sales, state.revenue,
         state.wholesaleSpent + state.permitSpent + state.wagesSpent,
         state.revenue - (state.wholesaleSpent + state.permitSpent + state.wagesSpent),
         state.lostSales, state.stockPurchases, state.demandAlignedPurchases, state.acceptCount, state.counterCount,
         state.counterSuccess, state.counterFailure, state.declineCount, state.permitRenewals, state.wagePayments,
-        state.liquidations, state.rescueGrants
+        state.liquidations, state.rescueGrants, state.deadEndSeconds, state.cash
     ))
 end
 
@@ -911,11 +1004,17 @@ local function assignOwner(player)
     notice("Önce tabeladan tezgâhı sahiplen. Sahiplik ücretsiz ve ilk dakikada görünür; satış için sonra pazar kaydı ve stok gerekir.")
 end
 
-local function chooseNextOwner()
+-- The leaving player can still be listed when the deferred choice runs (the
+-- order of PlayerRemoving handlers and the Parent change is an engine detail);
+-- K0.4 then handed the stall back to the player who had just left and every
+-- remaining player stayed a spectator.
+local function chooseNextOwner(leaving)
     if owner then return end
     for _, player in ipairs(Players:GetPlayers()) do
-        assignOwner(player)
-        return
+        if player ~= leaving and player.Parent == Players then
+            assignOwner(player)
+            return
+        end
     end
     updateWorldState()
 end
@@ -929,12 +1028,18 @@ for _, player in ipairs(Players:GetPlayers()) do setupPlayer(player) end
 Players.PlayerRemoving:Connect(function(player)
     decisionBuckets[player] = nil
     if player ~= owner then return end
-    printSessionSummary("owner_left")
+    printSessionSummary("owner_left", true)
     owner = nil
     cleanupActors()
     resetState()
     updateWorldState()
-    task.defer(chooseNextOwner)
+    task.defer(chooseNextOwner, player)
+end)
+
+-- Stopping a Studio test or shutting the server down must still leave the
+-- session's summary line in Output for the test record.
+game:BindToClose(function()
+    printSessionSummary("server_close", true)
 end)
 
 -- Shared one-second clock: permit, wages, demand and session metrics.
@@ -972,6 +1077,7 @@ task.spawn(function()
                 printSessionSummary("target_20m")
                 notice("20 dakikalık K0 test hedefi doldu. Oyun durmadı; gözlemci devam edip etmediğini ayrıca kaydetsin.")
             end
+            reportDeadEnd()
             sync()
         end
     end
@@ -982,15 +1088,15 @@ task.spawn(function()
     while true do
         task.wait(cosmeticRng:NextInteger(C.CrowdGapMin, C.CrowdGapMax))
         if owner and crowdCount < 4 then
+            -- Crowd walkers are decoration: they are not counted as passers-by.
             crowdCount += 1
-            state.passers += 1
-            if owner then owner:SetAttribute("K0Passers", state.passers) end
+            crowdSerial += 1
             task.spawn(function()
                 local lane = cosmeticRng:NextInteger(1, 2) == 1 and -7 or -10
                 local east = cosmeticRng:NextInteger(1, 2) == 1
                 local start = Vector3.new(east and -39 or 39, 2.8, lane)
                 local finish = Vector3.new(east and 39 or -39, 2.8, lane)
-                local pedestrian = makeNpc("Pedestrian_" .. state.passers, start)
+                local pedestrian = makeNpc("Pedestrian_" .. crowdSerial, start)
                 moveNpc(pedestrian, start, finish, cosmeticRng:NextInteger(10, 15))
                 if pedestrian and pedestrian.Parent then pedestrian:Destroy() end
                 crowdCount = math.max(0, crowdCount - 1)
