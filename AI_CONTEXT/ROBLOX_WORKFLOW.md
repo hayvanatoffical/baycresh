@@ -1,6 +1,18 @@
 # Roblox Studio ve MCP çalışma akışı
 
-**Durum:** Bağlantı ve üretim kontrol standardı · 25 Eylül 2026. Roblox'un [Studio MCP kılavuzu](https://create.roblox.com/docs/studio/mcp) araçların kapsamını ve bağlantı şeklini açıklar.
+**Durum:** Bağlantı ve üretim kontrol standardı · 25 Eylül 2026 (§0 27 Eylül 2026'da eklendi). Roblox'un [Studio MCP kılavuzu](https://create.roblox.com/docs/studio/mcp) araçların kapsamını ve bağlantı şeklini açıklar.
+
+## 0. Bağlantı
+
+Studio MCP sunucusu Studio'nun kurulu olduğu bilgisayarda yerel bir süreç olarak çalışır ve istemciyle stdio üzerinden konuşur. URL'si yoktur. Bu yüzden claude.ai bulut oturumu ve claude.ai connector'ı ona bağlanamaz. Studio'yu açık internete tünelle açma: MCP istemcisi açık place'i değiştirebilir.
+
+1. Studio'da **Assistant → … → Manage MCP Servers → Enable Studio as MCP server** açılır.
+2. Aynı bilgisayarda Claude Code'a sunucu eklenir (kullanıcı kapsamı, her projede görünür):
+   - Windows: `claude mcp add --transport stdio --scope user Roblox_Studio -- cmd.exe /c %LOCALAPPDATA%\Roblox\mcp.bat`
+   - macOS: `claude mcp add --transport stdio --scope user Roblox_Studio -- /Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`
+3. Depo klasöründe yeni oturum açılır. `claude mcp list` veya oturum içinde `/mcp` ile `Roblox_Studio` satırının `Connected` olduğu görülür. Sonra §1'den devam edilir.
+
+Kaynaklar: [Roblox Studio MCP](https://create.roblox.com/docs/studio/mcp) (Studio ayarı ve Windows/macOS komutu), [Claude Code MCP](https://code.claude.com/docs/en/mcp) (`claude mcp add` sözdizimi).
 
 ## 1. Hedefi belirle
 

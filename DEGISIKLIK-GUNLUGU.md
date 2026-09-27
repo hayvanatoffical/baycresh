@@ -1,5 +1,11 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 27 Eylül 2026 — Studio MCP bağlantı adımı
+
+Proje sahibi bilgisayara geçti ve Studio MCP bağlantısını istedi. Roblox'un Studio MCP sunucusu yalnız yerel stdio ile çalışır ve URL'si yoktur. Bu yüzden bulut oturumu ve claude.ai connector'ı ona ulaşamaz. [`AI_CONTEXT/ROBLOX_WORKFLOW.md`](AI_CONTEXT/ROBLOX_WORKFLOW.md) dosyasına §0 eklendi: Studio ayarı, Windows ve macOS için `claude mcp add` komutu ve bağlantı kontrolü. Kod ve oyun ayarı değişmedi. Durum değişmedi: `STUDIO PENDING`, `DEVICE PENDING`.
+
+---
+
 ## 27 Eylül 2026 — K0.4.7: prototipin kalan gri kutu eksikleri
 
 Proje sahibi hâlâ yalnız telefondaydı ve prototipin eksik kalan, eklenmesi gereken bütün parçalarının eklenmesini istedi. Kapsam K0 varlık listesinden seçildi (`PRODUCTION/K0.4_ASSET_REQUIREMENTS.md`, `ASSET-PROMPTS/04`, `05`, `07`, `03`). Varlık üretilmedi; hepsi yer tutucu veya adaydır. Ekonomi değerleri ve kuralları değişmedi. AÇIK-13 (talep panosu ödülü), §8 pazarlık yuvarlaması, kalıcı veri, çok satıcı ve borsa bilerek dokunulmadı. Kaynak sürümü `K0-market-0.4.7`.
