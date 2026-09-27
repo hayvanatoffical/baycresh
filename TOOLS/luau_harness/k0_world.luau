@@ -293,8 +293,8 @@ function K0World:absSize(obj)
     local parent = obj.Parent
     local pw, ph
     if parent:IsA("ScreenGui") then
-        local vp = world.camera.ViewportSize
-        pw, ph = vp.X, vp.Y
+        local area = parent.AbsoluteSize
+        pw, ph = area.X, area.Y
     elseif parent:IsA("GuiObject") then
         pw, ph = self:absSize(parent)
     else
@@ -314,6 +314,40 @@ function K0World:uiScale(obj)
         cur = cur.Parent
     end
     return scale
+end
+
+-- On-screen rectangle of a GuiObject in its ScreenGui, in pixels: x, y, width,
+-- height. A UIScale shrinks the object about its AnchorPoint and scales its
+-- descendants' offsets with it (documented UIScale behaviour, approximated).
+function K0World:rect(obj)
+    local parent = obj.Parent
+    local px, py, pw, ph, pk
+    if parent:IsA("ScreenGui") then
+        local area = parent.AbsoluteSize
+        px, py, pw, ph, pk = 0, 0, area.X, area.Y, 1
+    else
+        local k
+        px, py, pw, ph, k = self:rect(parent)
+        pk = k
+    end
+    local uw, uh = pw / pk, ph / pk
+    local own = 1
+    for _, c in ipairs(obj:GetChildren()) do
+        if c:IsA("UIScale") then own *= c.Scale end
+    end
+    local k = pk * own
+    local s, p, a = obj.Size, obj.Position, obj.AnchorPoint
+    local w = (s.X.Scale * uw + s.X.Offset) * k
+    local h = (s.Y.Scale * uh + s.Y.Offset) * k
+    local ax = px + (p.X.Scale * uw + p.X.Offset) * pk
+    local ay = py + (p.Y.Scale * uh + p.Y.Offset) * pk
+    return ax - a.X * w, ay - a.Y * h, w, h, k
+end
+
+function K0World.overlapArea(a, b)
+    local w = math.min(a[1] + a[3], b[1] + b[3]) - math.max(a[1], b[1])
+    local h = math.min(a[2] + a[4], b[2] + b[4]) - math.max(a[2], b[2])
+    return (w > 0 and h > 0) and w * h or 0
 end
 
 -- Text fit ESTIMATE. Gotham glyph widths are approximated per character class;

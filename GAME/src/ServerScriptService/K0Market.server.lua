@@ -532,14 +532,34 @@ end
 -- separately. The parts are welded to one anchored root now and only the root
 -- is tweened. The harness counts the drop in writes; the device and network
 -- effect is not measured yet.
+--
+-- K0.4.4: the figure's front is -Z (eyes, cap brim, apron), which is also a
+-- CFrame's LookVector. K0.4.3 tweened position only, so every figure faced -Z:
+-- walkers slid sideways and a customer at the counter stood with its back to
+-- the stall. The root now faces where it walks, level with the ground.
+local function facing(position, target)
+    local flat = Vector3.new(target.X, position.Y, target.Z)
+    if (flat - position).Magnitude < 0.01 then return CFrame.new(position) end
+    return CFrame.lookAt(position, flat)
+end
+
 local function moveNpc(model, from, to, duration)
     if not model or not model.Parent then return end
     local root = model.PrimaryPart
     if not root then return end
-    root.CFrame = CFrame.new(from)
-    local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = CFrame.new(to)})
+    local start = facing(from, to)
+    root.CFrame = start
+    local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = start + (to - from)})
     tween:Play()
     tween.Completed:Wait()
+end
+
+-- A short turn in place; the caller does not wait for it.
+local function turnNpc(model, target)
+    if not model or not model.Parent then return end
+    local root = model.PrimaryPart
+    if not root then return end
+    TweenService:Create(root, TweenInfo.new(0.35, Enum.EasingStyle.Sine), {CFrame = facing(root.Position, target)}):Play()
 end
 
 local function feedback(price, sku)
@@ -1205,6 +1225,8 @@ task.spawn(function()
                 state.visitorState = "walking"
                 sync()
                 moveNpc(visitor, entry, queue, economyRng:NextInteger(C.ShopperWalkMin, C.ShopperWalkMax))
+                -- At the counter the customer faces the seller, not the street.
+                turnNpc(visitor, interaction.SalePoint.Position)
 
                 if visitor and visitor.Parent and owner and commerceActive() then
                     if kind == "Browser" then
@@ -1222,7 +1244,7 @@ task.spawn(function()
                         salePrompt.ObjectText = p.Name .. " " .. state.currentOffer.units .. " " .. p.Unit
                         sync()
                         local note = kind == "Bargainer" and ("Pazarlıkçı geldi; bütçe sinyali " .. state.currentOffer.signal .. ".") or "Alıcı geldi."
-                        notice(note .. " Tezgahta E ile teklifi aç.")
+                        notice(note .. " Teklifi tezgâhta aç.")
 
                         local thisId = state.currentOffer.id
                         if state.hired and not state.wagesDue and kind == "Buyer" then

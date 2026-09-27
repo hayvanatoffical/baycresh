@@ -1,7 +1,7 @@
 # K0 — Studio'suz test yolu (Redmi telefon)
 
 **Durum:** Araştırma tamam · place kurulumu ve bulut smoke betiği bu depoda doğrulandı · **Roblox'a hiçbir şey gönderilmedi** (API anahtarı yok) · 26 Eylül 2026
-**Kaynak sürümü:** `K0-market-0.4.3`
+**Kaynak sürümü:** `K0-market-0.4.4`
 **Teknik ayrıntı:** [`TOOLS/place_build/README.md`](../TOOLS/place_build/README.md)
 
 ## Kısa cevap
@@ -76,7 +76,7 @@ Erişim ayarı: place **Private** kalabilir; sahibi oynayabilir. B12 ve Aşama 4
 
 | Plan adımı | Nasıl | Profil | Not |
 |---|---|---|---|
-| Aşama 0: hazır satırı, eski runtime yok, uyarı yok, migration ikinci kez tek metin | **Bulut smoke** (otomatik) | `default` | Redmi'de `/console` → Log → Server'da `Baycrest K0 market server ready K0-market-0.4.3` de görülür |
+| Aşama 0: hazır satırı, eski runtime yok, uyarı yok, migration ikinci kez tek metin | **Bulut smoke** (otomatik) | `default` | Redmi'de `/console` → Log → Server'da `Baycrest K0 market server ready K0-market-0.4.4` de görülür |
 | Aşama 0: NPC tek parça yürür (weld) | **Redmi'de oyna** | `default` | Fizik ister; bulut smoke göremez |
 | Aşama 1: 12 adımlı smoke | **Redmi'de oyna** | `default` | |
 | 2a raf kilidi | **Redmi'de oyna** | `default` | |
@@ -89,6 +89,7 @@ Erişim ayarı: place **Private** kalabilir; sahibi oynayabilir. B12 ve Aşama 4
 | 2d B19 tabela fiyatları | **Bulut smoke** + Redmi'de bak | her profil | Smoke her profilde tabelanın config fiyatını gösterdiğini denetler |
 | Aşama 3 K0.4.2 sesleri | **Redmi'de oyna** | `default` | Telefon hoparlörü asıl hedeftir; bu satır telefonda tam yapılabilir. Sesler önce Creator Store bağlantılarından dinlenebilir: [`ASSET_PROVENANCE.md`](ASSET_PROVENANCE.md) |
 | Aşama 3 K0.4.3 siluet ve ikonlar | **Redmi'de oyna** | `default` | Telefonda tam yapılabilir. Gri tonlama testi için ekran görüntüsü alınır ve siyah-beyaz filtreyle bakılır. Telefonda bu filtre bulunamazsa görüntü saklanır ve sonra çevrilir. |
+| Aşama 3 K0.4.4 telefon düzeni, dokunmatik metinler, NPC yönü | **Redmi'de oyna** | `default` | Telefonda tam yapılabilir; bu satırların asıl hedefi Redmi'dir. Teklif kartı açıkken ve bir bildirim görünürken birer ekran görüntüsü alınır. |
 | Aşama 3 cihaz testi | **Redmi** (hedef cihaz) | `default` | FPS yalnız ölçülürse yazılır: mobil MicroProfiler ve ikinci cihaz. Ölçülmezse "ölçülmedi" yazılır, tahmin yazılmaz. |
 | Aşama 4 üç oyuncu | Üç hesap, sırayla | `default` | Sahip aynı sunucuda izleyici olarak bulunur ve `summary` satırlarını `/console`'dan kopyalar veya ekran görüntüsü alır. Konsoldan metin kopyalama telefonda denenmedi. |
 

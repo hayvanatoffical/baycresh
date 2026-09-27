@@ -1,6 +1,6 @@
 # K0 test kaydı — doldurulacak şablon
 
-**Kaynak hedefi:** `K0-market-0.4.3`  
+**Kaynak hedefi:** `K0-market-0.4.4`  
 **Durum:** Şablon; yapılmış test veya oyuncu sonucu içermez. Her test sürümü için ayrı kopya oluşturulur. Kapı kararı `EKIP/07-YOL-HARITASI.md` §2'ye dayanır.
 
 > K0.3 kontrollü oynanış RNG seed'i kullanır ve her test sahibi atandığında aynı ekonomi dizisini baştan başlatır. Dekoratif kalabalık RNG'si ayrıdır. Katılımcıya 20 dakikalık geri sayım gösterilmez; süre dolduğunda oyun durmaz. Böylece “süre bitince kendiliğinden devam” davranışı daha az yönlendirilir.
@@ -8,7 +8,7 @@
 | Alan | Kayıt |
 |---|---|
 | Build / place adı ve ID | TBD |
-| Kaynak sürümü / commit | `K0-market-0.4.3` / TBD |
+| Kaynak sürümü / commit | `K0-market-0.4.4` / TBD |
 | Test tarihi ve saat dilimi | TBD |
 | Test edilen değişiklikler | TBD |
 | Cihaz / giriş yöntemi | TBD |
@@ -80,6 +80,9 @@ Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özell
 - **K0.4.2 · ses aday onayı:** sahip her slotu Creator Store bağlantısından dinledi mi, hangileri değişecek: **yapılmadı** — `PRODUCTION/ASSET_PROVENANCE.md` durum sütunu:
 - **K0.4.3 · rol siluetleri:** oyuncu pazarlıkçıyı teklif kartı açılmadan tanıdı mı (kaç müşteride sorulup kaçında doğru): **ölçülmedi** — kanıt yeri:
 - **K0.4.3 · HUD ikonları ve bütçe göstergesi:** telefonda anlaşılmayan ikon, gri tonlamada karışan çift: **ölçülmedi** — ekran görüntüsü:
+- **K0.4.4 · telefon düzeni:** teklif düğmelerinde yanlış basma, üst çubuğun veya zıplama düğmesinin altında kalan HUD parçası, okunamayan satır: **ölçülmedi** — ekran görüntüsü:
+- **K0.4.4 · dokunmatik metinler:** telefonda tuş adı söyleyen metin veya `1/2/3` önekli düğme görüldü mü: **ölçülmedi** — kanıt yeri:
+- **K0.4.4 · NPC yönü:** müşteriler yürüdüğü yöne bakıyor, tezgâhta satıcıya dönüyor mu: **ölçülmedi** — kanıt yeri:
 - Veri kaydı/geri dönüş: **K1 kapsamı; K0'da beklenmez**.
 
 ## Kapı kararı

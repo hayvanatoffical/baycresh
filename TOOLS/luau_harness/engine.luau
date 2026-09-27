@@ -140,9 +140,40 @@ function CFmethods.ToObjectSpace(a, b) return CFmethods.Inverse(a) * b end
 function CFmethods.ToWorldSpace(a, b) return a * b end
 function CFmethods.PointToWorldSpace(a, v) return a * v end
 function CFmethods.PointToObjectSpace(a, v) return CFmethods.Inverse(a) * v end
+-- Rotation part of Lerp turns about one axis at a steady rate (as Roblox's
+-- spherical interpolation does), so an in-between CFrame is still a rotation.
+-- Until K0.4.4 the nine matrix entries were lerped one by one, which shrank the
+-- axes half-way through a turn.
+local function axisAngle(R)
+    local angle = math.acos(math.clamp((R[1] + R[5] + R[9] - 1) / 2, -1, 1))
+    if angle < 1e-9 then return v3(0, 1, 0), 0 end
+    local x, y, z = R[8] - R[6], R[3] - R[7], R[4] - R[2]
+    local len = math.sqrt(x * x + y * y + z * z)
+    if len > 1e-6 then return v3(x / len, y / len, z / len), angle end
+    -- Half turn: the axis comes from the symmetric part, R = 2kk^T - I.
+    local kx = math.sqrt(math.max(0, (R[1] + 1) / 2))
+    local ky = math.sqrt(math.max(0, (R[5] + 1) / 2))
+    local kz = math.sqrt(math.max(0, (R[9] + 1) / 2))
+    if kx >= ky and kx >= kz then
+        ky, kz = (R[2] + R[4]) / (4 * kx), (R[3] + R[7]) / (4 * kx)
+    elseif ky >= kz then
+        kx, kz = (R[2] + R[4]) / (4 * ky), (R[6] + R[8]) / (4 * ky)
+    else
+        kx, ky = (R[3] + R[7]) / (4 * kz), (R[6] + R[8]) / (4 * kz)
+    end
+    return v3(kx, ky, kz).Unit, angle
+end
+local function axisRotation(k, a)
+    local c, s = math.cos(a), math.sin(a)
+    local t = 1 - c
+    local x, y, z = k.X, k.Y, k.Z
+    return {t * x * x + c, t * x * y - s * z, t * x * z + s * y,
+        t * x * y + s * z, t * y * y + c, t * y * z - s * x,
+        t * x * z - s * y, t * y * z + s * x, t * z * z + c}
+end
 function CFmethods.Lerp(a, b, t)
-    local r = {}
-    for i = 1, 9 do r[i] = a._r[i] + (b._r[i] - a._r[i]) * t end
+    local axis, angle = axisAngle(matMul(transpose(a._r), b._r))
+    local r = angle == 0 and table.clone(a._r) or matMul(a._r, axisRotation(axis, angle * t))
     local p = a._p:Lerp(b._p, t)
     return cf(p.X, p.Y, p.Z, r)
 end
@@ -184,6 +215,12 @@ local function rotX(a) local c, s = math.cos(a), math.sin(a) return {1, 0, 0, 0,
 local function rotY(a) local c, s = math.cos(a), math.sin(a) return {c, 0, s, 0, 1, 0, -s, 0, c} end
 local function rotZ(a) local c, s = math.cos(a), math.sin(a) return {c, -s, 0, s, c, 0, 0, 0, 1} end
 local CFrame = {}
+-- CFrame.lookAt(at, lookAt): position at, LookVector towards lookAt, world up
+-- (the optional up argument is not modelled; the K0 sources do not pass it).
+function CFrame.lookAt(at, target, up)
+    assert(up == nil, "CFrame.lookAt up vector not modelled (harness)")
+    return CFrame.new(at, target)
+end
 function CFrame.new(a, b, c, ...)
     if a == nil then return cf(0, 0, 0) end
     if isType(a, "Vector3") then
@@ -1015,7 +1052,10 @@ function Engine.new(options)
             local wd = internals[weld]
             if wd.destroyed then
                 world.welds[weld] = nil
-            elseif wd.parent and wd.props.Enabled and wd.offset then
+            -- Enabled defaults to true; its default is filled in only when read,
+            -- so an untouched weld has no stored value (K0.4.4 fix: before it,
+            -- no weld ever moved its peer and NPC parts stayed where they spawned).
+            elseif wd.parent and wd.props.Enabled ~= false and wd.offset then
                 if wd.props.Part0 == inst and wd.props.Part1 then
                     table.insert(out, {part = wd.props.Part1, offset = wd.offset})
                 elseif wd.props.Part1 == inst and wd.props.Part0 then
@@ -1191,8 +1231,20 @@ function Engine.new(options)
     defClass("LayerCollector", "Instance", {creatable = false, props = {
         Enabled = {type = "boolean", default = true}, ResetOnSpawn = {type = "boolean", default = true},
         ZIndexBehavior = {type = "Enum:ZIndexBehavior", default = function() return Enum.ZIndexBehavior.Sibling end}}})
+    -- AbsoluteSize is the area a ScreenGui lays out in: the viewport minus the
+    -- Roblox top bar unless IgnoreGuiInset is set. world.guiInset is 58 px, the
+    -- top bar height Roblox reports since the 2024 top bar (an assumption to
+    -- check on the device, not a measurement).
+    local function screenGuiSize(inst)
+        local vp = world.camera and internals[world.camera].props.ViewportSize or v2(1280, 720)
+        local inset = internals[inst].props.IgnoreGuiInset and 0 or (world.guiInset or 0)
+        return v2(vp.X, math.max(0, vp.Y - inset))
+    end
+    world.screenGuis = setmetatable({}, {__mode = "k"})
     defClass("ScreenGui", "LayerCollector", {props = {
-        IgnoreGuiInset = {type = "boolean", default = false}, DisplayOrder = {type = "number", default = 0}}})
+        IgnoreGuiInset = {type = "boolean", default = false}, DisplayOrder = {type = "number", default = 0},
+        AbsoluteSize = {type = "Vector2", readonly = true, get = function(inst) return screenGuiSize(inst) end}},
+        init = function(inst, d) world.screenGuis[inst] = true end})
     defClass("BillboardGui", "LayerCollector", {props = {
         Adornee = {type = "Instance:?"}, Size = {type = "UDim2", default = function() return udim2(0, 0, 0, 0) end},
         StudsOffset = {type = "Vector3", default = function() return v3() end},
@@ -1570,8 +1622,19 @@ function Engine.new(options)
     end
 
     function world:setViewport(x, y)
+        local before = {}
+        for g in pairs(world.screenGuis) do before[g] = screenGuiSize(g) end
         setPropRaw(camera, "ViewportSize", v2(x, y))
+        for g, old in pairs(before) do
+            local now = screenGuiSize(g)
+            if now ~= old then
+                local d = internals[g]
+                local ps = d.propSignals.AbsoluteSize
+                if ps then ps:_fire() end
+            end
+        end
     end
+    world.guiInset = 58
 
     world.globals = globals
     world.Enum = Enum

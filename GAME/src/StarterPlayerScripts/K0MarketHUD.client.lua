@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local Config = require(ReplicatedStorage:WaitForChild("K0MarketConfig"))
@@ -252,61 +251,102 @@ local function button(name, x, text)
     return b
 end
 
-local accept = button("Accept", 14, "1  Sat")
-local counter = button("Counter", 172, "2  Karşı teklif")
-local decline = button("Decline", 330, "3  Reddet")
+-- Texts are set on render: the 1/2/3 shortcut appears only with a keyboard.
+local accept = button("Accept", 14, "Sat")
+local counter = button("Counter", 172, "Karşı teklif")
+local decline = button("Decline", 330, "Reddet")
 counter.BackgroundColor3 = Color3.fromRGB(92, 116, 77)
 decline.BackgroundColor3 = Color3.fromRGB(70, 76, 78)
 
+-- K0.4.4 phone-first layout (EKIP/06 §1 "Telefon önce", §5 44×44 px touch
+-- targets). The HUD lays out in the ScreenGui's own AbsoluteSize, which already
+-- leaves out the Roblox top bar. A phone is what Roblox's touch controls also
+-- call a small screen: the shorter side is at most 500 px. On a phone the status
+-- panel keeps the left half, notices and help stack on the right, and the offer
+-- buttons stay out of the bottom-right corner where the default jump button sits
+-- (PlayerModule TouchJump: 70 px, 25 px from the right, 20 px from the bottom).
+-- All sizes are estimates until the device test.
+local TAP_MIN = 44
+local JUMP_CLEAR_X, JUMP_CLEAR_Y = 100, 95
+local STATUS_W, STATUS_H = 410, 334
+
+local function place(obj, x, y, anchorX, anchorY)
+    obj.AnchorPoint = Vector2.new(anchorX or 0, anchorY or 0)
+    obj.Position = UDim2.fromOffset(x, y)
+end
+
+local function layoutButtons(y, width, height, xs)
+    for i, b in ipairs({accept, counter, decline}) do
+        b.Position = UDim2.fromOffset(xs[i], y)
+        b.Size = UDim2.fromOffset(width, height)
+    end
+end
+
 local function updateScale()
-    local camera = Workspace.CurrentCamera
-    if not camera then return end
-    local size = camera.ViewportSize
-    local narrow = size.X < 620
+    local area = gui.AbsoluteSize
+    local W, H = area.X, area.Y
+    if W <= 0 or H <= 0 then return end
+    local phone = math.min(W, H) <= 500
 
-    local statusScaleValue = math.min(math.clamp(size.X / 760, 0.72, 1), math.clamp(size.Y / 650, 0.76, 1))
-    statusScale.Scale = statusScaleValue
-    helpScale.Scale = math.min(math.clamp(size.X / 760, 0.56, 1), math.clamp(size.Y / 650, 0.72, 1))
-    toastScale.Scale = math.min(math.clamp(size.X / 650, 0.62, 1), 1)
+    local s
+    if phone then
+        s = math.min(1, (H - 36) / STATUS_H, (W / 2 - 24) / STATUS_W)
+    else
+        s = math.min(math.clamp(W / 760, 0.72, 1), math.clamp(H / 650, 0.76, 1))
+    end
+    statusScale.Scale = s
+    local statusRight = 18 + STATUS_W * s
 
-    if narrow then
-        -- On phones, keep touch targets tall instead of shrinking three buttons
-        -- into a single tiny row. The whole card is scaled to fit the viewport.
-        offer.Size = UDim2.fromOffset(430, 374)
+    if phone then
+        -- Right column: notice on top, help under it, both above the jump button.
+        local x0 = statusRight + 12
+        local r = math.min(1, (W - 18 - x0) / 400, (H - 18 - JUMP_CLEAR_Y) / 216)
+        toast.Size = UDim2.fromOffset(400, 104)
+        toastText.Size = UDim2.new(1, -28, 0, 94)
+        toastScale.Scale = r
+        place(toast, x0, 18)
+        help.Size = UDim2.fromOffset(400, 104)
+        helpText.Size = UDim2.new(1, -28, 0, 92)
+        helpScale.Scale = r
+        place(help, x0, 18 + 112 * r)
+
+        -- One row of three tall buttons. K0.4.3 stacked them on narrow screens,
+        -- which made the card too tall for a landscape phone and shrank each
+        -- button to about 37 px.
+        offer.Size = UDim2.fromOffset(440, 236)
         indent(offerDetail, 48, 45)
         indent(offerSignal, 48, 105)
-        indent(offerStock, 48, 133)
-        accept.Position = UDim2.new(0, 14, 0, 174)
-        counter.Position = UDim2.new(0, 14, 0, 234)
-        decline.Position = UDim2.new(0, 14, 0, 294)
-        accept.Size = UDim2.fromOffset(402, 52)
-        counter.Size = UDim2.fromOffset(402, 52)
-        decline.Size = UDim2.fromOffset(402, 52)
-        offerScale.Scale = math.min(math.clamp(size.X / 455, 0.72, 1), math.clamp(size.Y / 640, 0.72, 1))
+        indent(offerStock, 48, 131)
+        layoutButtons(162, 130, 62, {14, 155, 296})
+        local o = math.min(1, (W - 24) / 440, (H - 16) / 236)
+        offerScale.Scale = o
+        place(offer, math.min(W / 2, W - JUMP_CLEAR_X - 220 * o), H / 2, 0.5, 0.5)
     else
+        -- The notice uses the free width right of the status panel so it never
+        -- covers the cash line (K0.4.3 centred it over the panel's right edge).
+        local free = W - 18 - (statusRight + 12)
+        local t = math.min(1, free / 510)
+        toast.Size = UDim2.fromOffset(510, 86)
+        toastText.Size = UDim2.new(1, -28, 0, 76)
+        toastScale.Scale = t
+        place(toast, statusRight + 12 + (free - 510 * t) / 2, 18)
+        help.Size = UDim2.fromOffset(620, 72)
+        helpText.Size = UDim2.new(1, -28, 0, 60)
+        helpScale.Scale = math.min(math.clamp(W / 760, 0.56, 1), math.clamp(H / 650, 0.72, 1), (W - 36) / 620)
+        place(help, 18, H - 18, 0, 1)
+
         offer.Size = UDim2.fromOffset(490, 244)
         indent(offerDetail, 48, 45)
         indent(offerSignal, 48, 105)
         indent(offerStock, 48, 131)
-        accept.Position = UDim2.new(0, 14, 0, 174)
-        counter.Position = UDim2.new(0, 172, 0, 174)
-        decline.Position = UDim2.new(0, 330, 0, 174)
-        accept.Size = UDim2.fromOffset(146, 54)
-        counter.Size = UDim2.fromOffset(146, 54)
-        decline.Size = UDim2.fromOffset(146, 54)
-        offerScale.Scale = math.min(math.clamp(size.X / 920, 0.72, 1), math.clamp(size.Y / 650, 0.76, 1))
+        layoutButtons(174, 146, 54, {14, 172, 330})
+        local o = math.clamp(math.min(W / 920, H / 650), TAP_MIN / 54, 1)
+        offerScale.Scale = o
+        place(offer, W / 2, H / 2, 0.5, 0.5)
     end
 end
 updateScale()
-local viewportConnection = nil
-local function watchCamera()
-    if viewportConnection then viewportConnection:Disconnect() end
-    local camera = Workspace.CurrentCamera
-    viewportConnection = camera and camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale) or nil
-    updateScale()
-end
-watchCamera()
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
+gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 
 -- K0.4.2 sound cues (ASSET-PROMPTS/06-SFX.md). Sound only repeats what the HUD
 -- already shows (EKIP/06 §8), plays for the seller only, and never for the state
@@ -413,6 +453,22 @@ end)
 
 local lastNotice = -1
 
+-- K0.4.4: a phone has no E key and no number row. The stall prompts are held
+-- (HoldDuration > 0) and show their own on-screen button on touch devices, so
+-- help names the key only when a keyboard exists, and the offer buttons carry
+-- their 1/2/3 shortcut only then.
+local function hasKeyboard()
+    return UserInputService.KeyboardEnabled
+end
+
+local function promptHowTo()
+    return hasKeyboard() and "E'yi basılı tut" or "çıkan düğmeye basılı tut"
+end
+
+local function keyHint(n)
+    return hasKeyboard() and (n .. "  ") or ""
+end
+
 local function productName(sku)
     local p = C.Products[sku]
     return p and p.Name or "—"
@@ -480,7 +536,7 @@ local function render()
 
     if not claimed then
         goalLabel.Text = "1 / İlk dakikada tezgâhı sahiplen."
-        helpText.Text = "Tezgâh tabelasına yaklaş ve E. Sahiplik ücretsiz; ekonomi kararı bundan sonra başlar."
+        helpText.Text = "Tezgâh tabelasına yaklaş ve " .. promptHowTo() .. ". Sahiplik ücretsiz; ekonomi kararı bundan sonra başlar."
     elseif not permit then
         goalLabel.Text = "2 / Pazar Yönetimi'nde " .. C.PermitFee .. " ₡ kayıt yap."
         helpText.Text = "Sahiplik sende. Satış açmak için soldaki yönetim panosunda kaydı tamamla."
@@ -505,7 +561,7 @@ local function render()
         helpText.Text = C.Products.orange.Name .. " " .. C.Products.orange.WholesaleBundle .. " " .. C.Products.orange.Unit .. " / " .. C.Products.orange.WholesaleCost .. " ₡, " .. C.Products.bread.Name .. " " .. C.Products.bread.WholesaleBundle .. " " .. C.Products.bread.Unit .. " / " .. C.Products.bread.WholesaleCost .. " ₡. Üstteki talep göstergesi hangi ürünün daha yüksek fiyata gittiğini söyler."
     elseif level == 1 then
         goalLabel.Text = "Büyüme: " .. cost .. " ₡ gerekli; eksik " .. math.max(0, cost - cash) .. " ₡."
-        helpText.Text = "Alıcı teklifi için tezgahta E. Pazarlıkçıda düşük teklifi kabul et, bütçe sinyaline göre karşı teklif ver veya reddet."
+        helpText.Text = "Müşteri gelince tezgâhta " .. promptHowTo() .. "; teklif kartı açılır. Pazarlıkçıda düşük teklifi kabul et, bütçe sinyaline göre karşı teklif ver veya reddet."
     elseif not hired then
         goalLabel.Text = "Seviye 2: kapasite büyüdü. Kasiyer " .. C.HireCost .. " ₡ yatırım."
         helpText.Text = "Kasiyer normal alıcıları otomatik servis eder; maaşı işletme gideridir. Yatırımın nakit etkisini gözle."
@@ -535,11 +591,12 @@ local function render()
         offerBread.Visible = sku == "bread"
         offerBudget.Visible = kind == "Bargainer" and budgetFill[signal] ~= nil
         budgetLevel.Size = UDim2.fromOffset(6, math.floor(18 * (budgetFill[signal] or 0) + 0.5))
-        accept.Text = available < units and "Stok yok" or ("1  Sat  " .. bid .. " ₡")
+        accept.Text = available < units and "Stok yok" or (keyHint(1) .. "Sat  " .. bid .. " ₡")
         accept.Active = available >= units
         accept.AutoButtonColor = available >= units
         counter.Visible = kind == "Bargainer"
-        counter.Text = "2  Karşı teklif  " .. counterPrice .. " ₡"
+        counter.Text = keyHint(2) .. "Karşı teklif  " .. counterPrice .. " ₡"
+        decline.Text = keyHint(3) .. "Reddet"
         counter.Active = available >= units
         counter.AutoButtonColor = available >= units
     end

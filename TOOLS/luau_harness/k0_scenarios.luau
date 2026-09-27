@@ -766,13 +766,75 @@ scenario("H11", "20-minute balanced session: summary, milestones, invariants", n
     noUnexpectedWarnings(w)
 end)
 
+-- Viewport = the whole screen; the HUD lays out in it minus the Roblox top bar
+-- (engine world.guiInset, 58 px assumed). Landscape is the Roblox mobile default.
 local VIEWPORTS = {
     {name = "PC 1280x720", x = 1280, y = 720},
     {name = "phone landscape 740x360", x = 740, y = 360},
     {name = "narrow phone 568x320", x = 568, y = 320},
 }
+local TAP_MIN = 44 -- EKIP/06 §5
 
-scenario("H12", "HUD layout: offer card states and estimated text fit", {"Deferred"}, function(mode)
+-- Geometry of the fixed HUD panels and the offer card at the current viewport.
+-- Returns a list of problems. Phones (shorter side of the HUD area at most 500 px,
+-- the small-screen rule of Roblox's touch controls) also keep the bottom-right
+-- corner free for the default jump button (PlayerModule TouchJump on a small
+-- screen: 70 px, 25 px from the right, 20 px from the bottom).
+local function layoutProblems(w, gui, vpName, stats)
+    local problems = {}
+    local area = gui.AbsoluteSize
+    local W, H = area.X, area.Y
+    local phone = math.min(W, H) <= 500
+    local jump = {W - 95, H - 90, 70, 70}
+    local function box(obj)
+        local x, y, bw, bh = w:rect(obj)
+        return {x, y, bw, bh}
+    end
+    local function inside(name, r)
+        if r[1] < -0.5 or r[2] < -0.5 or r[1] + r[3] > W + 0.5 or r[2] + r[4] > H + 0.5 then
+            table.insert(problems, string.format("%s · %s leaves the screen (%.0f,%.0f %.0fx%.0f in %dx%d)", vpName, name, r[1], r[2], r[3], r[4], W, H))
+        end
+    end
+    local panels = {Status = box(gui.Status), Help = box(gui.Help), Notice = box(gui.Notice)}
+    for name, r in pairs(panels) do inside(name, r) end
+    local names = {"Status", "Help", "Notice"}
+    for i = 1, #names do
+        for j = i + 1, #names do
+            local a = K0World.overlapArea(panels[names[i]], panels[names[j]])
+            if a > 0.5 then
+                table.insert(problems, string.format("%s · %s and %s overlap (%.0f px²)", vpName, names[i], names[j], a))
+            end
+        end
+    end
+    if phone then
+        for _, name in ipairs({"Help", "Notice"}) do
+            if K0World.overlapArea(panels[name], jump) > 0.5 then
+                table.insert(problems, vpName .. " · " .. name .. " covers the jump button corner")
+            end
+        end
+    end
+    local offer = gui.Offer
+    if offer.Visible then
+        inside("Offer", box(offer))
+        for _, b in ipairs({offer.Accept, offer.Counter, offer.Decline}) do
+            if b.Visible then
+                local r = box(b)
+                inside(b.Name, r)
+                stats.tapW = math.min(stats.tapW or math.huge, r[3])
+                stats.tapH = math.min(stats.tapH or math.huge, r[4])
+                if r[3] < TAP_MIN - 0.01 or r[4] < TAP_MIN - 0.01 then
+                    table.insert(problems, string.format("%s · %s button %.0fx%.0f px, under %d px", vpName, b.Name, r[3], r[4], TAP_MIN))
+                end
+                if phone and K0World.overlapArea(r, jump) > 0.5 then
+                    table.insert(problems, vpName .. " · " .. b.Name .. " button under the jump button corner")
+                end
+            end
+        end
+    end
+    return problems
+end
+
+scenario("H12", "HUD layout: offer card, 44 px taps, no panel overlap on three screens (estimate)", {"Deferred"}, function(mode)
     local w = setup(mode)
     local p = w:addPlayer("Tester1")
     local h = handles(w)
@@ -783,7 +845,9 @@ scenario("H12", "HUD layout: offer card states and estimated text fit", {"Deferr
     go(w, p, h.bread)
     local sawBargainer, sawBuyer = false, false
     local guard = 0
-    local risks = {}
+    local risks, layout = {}, {}
+    local stats = {}
+    for _, vp in ipairs(VIEWPORTS) do stats[vp.name] = {} end
     local function scanFit(label)
         for _, vp in ipairs(VIEWPORTS) do
             w.world:setViewport(vp.x, vp.y)
@@ -794,15 +858,15 @@ scenario("H12", "HUD layout: offer card states and estimated text fit", {"Deferr
                     risks[key] = string.format("%s · %s: ~%d lines need %.0f px, box %.0f px (\"%s\")", vp.name, r.name, r.lines, r.needPx, r.havePx, r.text)
                 end
             end
+            for _, problem in ipairs(layoutProblems(w, gui, vp.name, stats[vp.name])) do layout[problem] = true end
             local minSize, who = w:minTextSize(gui)
-            if vp.name == "narrow phone 568x320" then
-                CURRENT.minText = math.min(CURRENT.minText or math.huge, minSize)
-                CURRENT.minTextWho = CURRENT.minText == minSize and who or CURRENT.minTextWho
-            end
+            local st = stats[vp.name]
+            if minSize < (st.minText or math.huge) then st.minText, st.minTextWho = minSize, who end
         end
         w.world:setViewport(1280, 720)
         w.world:advance(0.1)
     end
+    -- The notice box is measured whether or not a notice is showing.
     scanFit("idle")
     while (not sawBargainer or not sawBuyer) and guard < 30 do
         guard += 1
@@ -820,13 +884,11 @@ scenario("H12", "HUD layout: offer card states and estimated text fit", {"Deferr
             sawBuyer = true
             check(not offer.Counter.Visible, "counter button hidden for a normal buyer")
         end
-        -- Narrow layout: buttons stacked and tall enough to tap.
-        w.world:setViewport(568, 320)
+        -- Phones: one row of buttons, so the card stays short on a landscape screen.
+        w.world:setViewport(740, 360)
         w.world:advance(0.1)
-        local bw, bh = w:absSize(offer.Accept)
-        local scale = w:uiScale(offer.Accept)
-        CURRENT.tapPx = math.min(CURRENT.tapPx or math.huge, bh * scale)
-        check(offer.Counter.Position.Y.Offset > offer.Accept.Position.Y.Offset, "narrow layout stacks the buttons vertically")
+        check(offer.Counter.Position.Y.Offset == offer.Accept.Position.Y.Offset
+            and offer.Decline.Position.Y.Offset == offer.Accept.Position.Y.Offset, "phone layout keeps the buttons in one row")
         w.world:setViewport(1280, 720)
         w.world:advance(0.1)
         scanFit("offer")
@@ -839,9 +901,191 @@ scenario("H12", "HUD layout: offer card states and estimated text fit", {"Deferr
     for _, v in pairs(risks) do table.insert(list, v) end
     table.sort(list)
     check(#list == 0, "no HUD label is estimated to overflow its box" .. (#list > 0 and (":\n      - " .. table.concat(list, "\n      - ")) or ""))
-    note(string.format("narrow phone: smallest effective text %.1f px (%s); tap target height %.0f px (estimate, before device test)",
-        CURRENT.minText or -1, tostring(CURRENT.minTextWho), CURRENT.tapPx or -1))
+    local bad = {}
+    for v in pairs(layout) do table.insert(bad, v) end
+    table.sort(bad)
+    check(#bad == 0, "panels inside the screen, no overlap, buttons at least 44 px, jump corner free"
+        .. (#bad > 0 and (":\n      - " .. table.concat(bad, "\n      - ")) or ""))
+    for _, vp in ipairs(VIEWPORTS) do
+        local st = stats[vp.name]
+        note(string.format("%s: smallest text %.1f px (%s); smallest button %.0fx%.0f px (estimate, before device test)",
+            vp.name, st.minText or -1, tostring(st.minTextWho), st.tapW or -1, st.tapH or -1))
+    end
     noScriptErrors(w)
+end)
+
+-- K0.4.4: a phone has no E key and no number row (EKIP/06 §1 "Telefon önce").
+local KEY_WORDS = {"E'yi", "E'ye", " E ", " E%.", "E ile", "[Tt]uş", "^%d  ", "klavye"}
+local function keyOnly(text)
+    for _, pat in ipairs(KEY_WORDS) do
+        if string.find(text, pat) then return pat end
+    end
+    return nil
+end
+
+scenario("H20", "Touch-only device: no instruction names a key; keyboard keeps its shortcuts", {"Deferred"}, function(mode)
+    for _, device in ipairs({"touch", "keyboard"}) do
+        local w = setup(mode)
+        local uis = w.game:GetService("UserInputService")
+        uis.TouchEnabled = device == "touch"
+        uis.KeyboardEnabled = device == "keyboard"
+        local p = w:addPlayer("Tester1")
+        local h = handles(w)
+        local gui = w:hud(p)
+        local texts = {}
+        local function grab(kind, text) if type(text) == "string" and text ~= "" then texts[kind .. ": " .. text] = text end end
+        p:GetAttributeChangedSignal("K0Notice"):Connect(function() grab("notice", p:GetAttribute("K0Notice")) end)
+        gui.Help.HelpText:GetPropertyChangedSignal("Text"):Connect(function() grab("help", gui.Help.HelpText.Text) end)
+        gui.Status.Goal:GetPropertyChangedSignal("Text"):Connect(function() grab("goal", gui.Status.Goal.Text) end)
+        grab("help", gui.Help.HelpText.Text)
+        local claimHelp = gui.Help.HelpText.Text
+        local buttons = {}
+        local offers = 0
+        playFor(w, p, h, 600, {
+            decide = function(pp)
+                offers += 1
+                for _, b in ipairs({gui.Offer.Accept, gui.Offer.Counter, gui.Offer.Decline}) do
+                    if b.Visible then buttons[b.Name .. ": " .. b.Text] = b.Text end
+                end
+                return defaultDecision(pp)
+            end,
+        })
+        check(offers > 0, device .. ": offers were answered (" .. offers .. ")")
+        if device == "touch" then
+            check(string.find(claimHelp, "düğmeye basılı tut", 1, true) ~= nil, "touch: claim help says to hold the on-screen button: " .. claimHelp)
+            local bad = {}
+            for label, text in pairs(texts) do
+                local hit = keyOnly(text)
+                if hit then table.insert(bad, label .. "  [" .. hit .. "]") end
+            end
+            for label, text in pairs(buttons) do
+                if string.find(text, "^%d") then table.insert(bad, "button " .. label) end
+            end
+            table.sort(bad)
+            check(#bad == 0, "touch: no text or button names a key" .. (#bad > 0 and (":\n      - " .. table.concat(bad, "\n      - ")) or ""))
+        else
+            check(string.find(claimHelp, "E'yi basılı tut", 1, true) ~= nil, "keyboard: claim help names the E key: " .. claimHelp)
+            local numbered = 0
+            for _, text in pairs(buttons) do
+                if string.find(text, "^[123]  ") then numbered += 1 end
+            end
+            check(numbered > 0, "keyboard: offer buttons keep their 1/2/3 shortcut")
+        end
+        local serverNotices = 0
+        for _, text in pairs(texts) do if string.find(text, "tezgâhta aç", 1, true) then serverNotices += 1 end end
+        check(serverNotices > 0, device .. ": customer notice seen and device-neutral")
+        noScriptErrors(w)
+    end
+end)
+
+-- K0.4.4: the figure's front is -Z (eyes, cap brim, apron) = LookVector.
+local function eyesForward(model)
+    local root, head = model.PrimaryPart, model:FindFirstChild("Head")
+    local sum, n = Vector3.new(0, 0, 0), 0
+    for _, part in ipairs(model:GetChildren()) do
+        if part.Name == "Eye" then sum += part.Position n += 1 end
+    end
+    if not root or not head or n == 0 then return false end
+    return ((sum / n) - head.Position):Dot(root.CFrame.LookVector) > 0.3
+end
+
+local function flatDir(from, to)
+    local d = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+    return d.Magnitude > 0 and d.Unit or d
+end
+
+scenario("H21", "NPCs face where they walk; customers at the counter and the cashier face each other", nil, function(mode)
+    -- Harness self-check: a CFrame half-way through a turn is still a rotation.
+    local o = Vector3.new(0, 0, 0)
+    for _, turn in ipairs({{Vector3.new(1, 0, 0), Vector3.new(0, 0, 1), 0.7071}, {Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0), 0}}) do
+        local mid = CFrame.lookAt(o, turn[1]):Lerp(CFrame.lookAt(o, turn[2]), 0.5)
+        local look, right, up = mid.LookVector, mid.RightVector, mid.UpVector
+        check(math.abs(look.Magnitude - 1) < 1e-6 and math.abs(right.Magnitude - 1) < 1e-6 and math.abs(look:Dot(right)) < 1e-6
+            and math.abs(look:Dot(turn[1]) - turn[3]) < 1e-3 and up.Y > 0.999,
+            string.format("harness Lerp keeps a rotation half-way through a %.0f° turn", math.deg(math.acos(turn[1]:Dot(turn[2])))))
+    end
+    local w = setup(mode)
+    local p = w:addPlayer("Tester1")
+    local h = handles(w)
+    local scene = w:scene()
+    local salePos = h.sale.Parent.Position
+    go(w, p, h.claim)
+    go(w, p, h.permit)
+    go(w, p, h.orange)
+    go(w, p, h.bread)
+    local last, steps, badWalk, roles = {}, 0, {}, {}
+    local function sample()
+        for _, m in ipairs(scene:GetChildren()) do
+            if m:IsA("Model") and m:GetAttribute("NpcRole") and m.PrimaryPart then
+                local pos, look = m.PrimaryPart.Position, m.PrimaryPart.CFrame.LookVector
+                local prev = last[m]
+                -- A window in which the figure also turned (arrival at the
+                -- counter) is not a walking step.
+                if prev and prev.look:Dot(look) > 0.999
+                    and Vector3.new(pos.X - prev.pos.X, 0, pos.Z - prev.pos.Z).Magnitude > 0.3 then
+                    steps += 1
+                    roles[m:GetAttribute("NpcRole")] = true
+                    local dot = flatDir(prev.pos, pos):Dot(look)
+                    if dot < 0.95 then badWalk[m.Name] = string.format("%s walks with look·move %.2f", m.Name, dot) end
+                    if not eyesForward(m) then badWalk[m.Name .. "/eyes"] = m.Name .. " eyes not on its front while walking" end
+                    -- Welded parts travel with the root (the harness moves weld
+                    -- peers; real weld physics is a device check).
+                    local head = m:FindFirstChild("Head")
+                    if not head or (head.Position - pos).Magnitude > 2 then
+                        badWalk[m.Name .. "/apart"] = m.Name .. " head left behind while walking"
+                    end
+                end
+                last[m] = {pos = pos, look = look}
+            end
+        end
+    end
+    local atCounter, badCounter = 0, {}
+    local stop = w.world.now + 600
+    while w.world.now < stop do
+        local ready = w.world:runUntil(function() sample() return attr(p, "K0CustomerReady") == true end, stop - w.world.now)
+        if not ready then break end
+        w.world:advance(0.6) -- the turn takes 0.35 s
+        for _, m in ipairs(scene:GetChildren()) do
+            if m:IsA("Model") and string.find(m.Name, "^Visitor_") and m.PrimaryPart then
+                atCounter += 1
+                local dot = flatDir(m.PrimaryPart.Position, salePos):Dot(m.PrimaryPart.CFrame.LookVector)
+                if dot < 0.95 then table.insert(badCounter, string.format("%s at the counter: look·stall %.2f", m.Name, dot)) end
+                if not eyesForward(m) then table.insert(badCounter, m.Name .. " eyes not on its front at the counter") end
+            end
+        end
+        go(w, p, h.sale)
+        answerOffer(w, p, h, defaultDecision)
+        last = {}
+    end
+    local list = {}
+    for _, v in pairs(badWalk) do table.insert(list, v) end
+    table.sort(list)
+    check(steps > 50, "walking NPCs sampled (" .. steps .. " steps)")
+    check(roles.Buyer and roles.Passerby and roles.Pedestrian, "customers, passers-by and pedestrians all sampled")
+    check(#list == 0, "every walking NPC holds together and faces its direction of travel" .. (#list > 0 and (":\n      - " .. table.concat(list, "\n      - ")) or ""))
+    check(atCounter >= 5, "customers checked at the counter (" .. atCounter .. ")")
+    check(#badCounter == 0, "a customer at the counter faces the stall" .. (#badCounter > 0 and (":\n      - " .. table.concat(badCounter, "\n      - ")) or ""))
+    noScriptErrors(w)
+
+    -- The cashier stands behind the counter and faces the customer spot.
+    local w2 = setup(mode, {configPatch = patchNumber("StartingCash", C.PermitFee + C.UpgradeCost + C.HireCost + 150)})
+    local p2 = w2:addPlayer("Seller1")
+    local h2 = handles(w2)
+    go(w2, p2, h2.claim)
+    go(w2, p2, h2.permit)
+    go(w2, p2, h2.orange)
+    go(w2, p2, h2.upgrade)
+    go(w2, p2, h2.hire)
+    w2.world:advance(0.5)
+    local worker = w2:scene():FindFirstChild("Worker_K0")
+    local queue = w2:scene().Waypoints.CustomerQueue.Position
+    check(worker ~= nil, "cashier hired")
+    if worker then
+        local dot = flatDir(worker.PrimaryPart.Position, queue):Dot(worker.PrimaryPart.CFrame.LookVector)
+        check(dot > 0.9, string.format("cashier faces the customer spot (look·queue %.2f)", dot))
+        check(eyesForward(worker), "cashier's eyes are on its front")
+    end
+    noScriptErrors(w2)
 end)
 
 scenario("H13", "Monkey session: random prompts and remote junk for 40 minutes", nil, function(mode)
@@ -949,16 +1193,23 @@ scenario("H15", "Every notice, help and goal text seen fits its HUD box (estimat
     end
     -- Box sizes come from the HUD source at scale 1; UIScale shrinks the box and
     -- the text together, so the line count does not change with the viewport.
+    -- K0.4.4: phones use a narrower, taller notice and help box (right column).
     local boxes = {
-        notice = {width = 510 - 28, height = 76, size = 15, what = "Notice"},
-        help = {width = 620 - 28, height = 60, size = 15, what = "Help"},
-        goal = {width = 410 - 28, height = 52, size = 14, what = "Goal"},
+        {kind = "notice", width = 510 - 28, height = 76, size = 15, what = "Notice"},
+        {kind = "notice", width = 400 - 28, height = 94, size = 15, what = "Notice (phone)"},
+        {kind = "help", width = 620 - 28, height = 60, size = 15, what = "Help"},
+        {kind = "help", width = 400 - 28, height = 92, size = 15, what = "Help (phone)"},
+        {kind = "goal", width = 410 - 28, height = 52, size = 14, what = "Goal"},
     }
     local bad, total, longest = {}, 0, 0
-    for kind, box in pairs(boxes) do
-        for text in pairs(SEEN_TEXT[kind]) do
+    for _, list in pairs(SEEN_TEXT) do
+        for text in pairs(list) do
             total += 1
             longest = math.max(longest, utf8.len(text) or #text)
+        end
+    end
+    for _, box in ipairs(boxes) do
+        for text in pairs(SEEN_TEXT[box.kind]) do
             local lines = K0World.estimateLines(text, box.size, box.width)
             if lines * box.size * 1.2 > box.height + 0.5 then
                 table.insert(bad, string.format("%s ~%d lines, %d px box: %s", box.what, lines, box.height, text))
@@ -1267,7 +1518,11 @@ local function silhouette(model)
     local front, side = {}, {}
     for _, part in ipairs(model:GetChildren()) do
         if part:IsA("BasePart") and part ~= root and part.Transparency < 1 then
-            local o = part.Position - root.Position
+            -- In the figure's own frame: NPCs turn since K0.4.4, and the parts
+            -- are axis-aligned with the root, so Size maps onto local axes.
+            local o = root.CFrame:PointToObjectSpace(part.Position)
+            -- Snap away rotation round-off so a turned figure rasterises the same.
+            o = Vector3.new(math.round(o.X * 1e6) / 1e6, math.round(o.Y * 1e6) / 1e6, math.round(o.Z * 1e6) / 1e6)
             local ball = part.Shape == Enum.PartType.Ball
             local function fill(cells, cx, cy, sx, sy)
                 for gx = math.floor((cx - sx / 2) * 10), math.ceil((cx + sx / 2) * 10) do

@@ -1,5 +1,34 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 27 Eylül 2026 — K0.4.4: telefon önce
+
+`EKIP/06-ARAYUZ-VE-SES.md` "telefon önce" der ve §5'te dokunma hedeflerinin en az 44×44 px olmasını ister. Harness, K0.4.3 HUD'unu üç ekran boyutunda ölçtü ve bu kurala uymadığını gösterdi. Metinler de dokunmatik cihazda olmayan tuşları söylüyordu (E, 1/2/3), NPC'ler ise hep aynı yöne bakıyordu. Hepsi kaynakta düzeltildi. Ekonomi değerleri ve kuralları değişmedi. Kaynak sürümü `K0-market-0.4.4`.
+
+- **Dokunmatik metinler.** Yardım metni cihaza göre değişiyor. Klavye varsa "E'yi basılı tut", yoksa "çıkan düğmeye basılı tut" yazıyor. Teklif düğmelerindeki 1/2/3 numarası yalnız klavyede görünüyor ve kısayollar çalışmaya devam ediyor. Sunucunun müşteri bildirimi tuş adı vermiyor, "Teklifi tezgâhta aç." diyor. ProximityPrompt'ların basılı tutma süresi olduğu için metinler "bas" değil "basılı tut" diyor.
+- **Telefon HUD düzeni.** K0.4.3'te dört sorun vardı:
+  - Teklif düğmeleri 568×320'de 37 px, 740×360'ta 41 px idi.
+  - Telefonda durum paneli yardım ve bildirim kutusuyla üst üste biniyordu.
+  - PC'de bildirim kasa panelinin sağ kenarını örtüyordu.
+  - HUD kameranın ekranını ölçüyordu ve Roblox üst çubuğunu hesaba katmıyordu. Bu yüzden dar telefonda teklif kartı ekrandan taşıyordu.
+
+  HUD artık ScreenGui'nin kendi alanını (`AbsoluteSize`) ölçüyor. Kısa kenarı 500 px veya daha az olan ekranda düğmeler tek sırada 130×62 px. Bildirim ve yardım kutusu durum panelinin sağında duruyor ve sağ alttaki zıplama düğmesinin köşesi boş kalıyor. PC'de bildirim, kasa panelinin sağındaki boşluğa ortalanıyor; düğmeler 146×54 px.
+- **NPC yönü.** Figürler yürüdükleri yöne dönüyor. Tezgâha varan müşteri 0,35 sn içinde satış noktasına dönüyor. Eskiden yalnız konum tween'lendiği için tezgâhtaki müşteri satıcıya sırtını dönüyordu. Kasiyer zaten sıraya bakıyordu; bunu artık H21 denetliyor.
+- **Harness motor düzeltmeleri.** Weld'li parçalar kökü izlemiyordu, çünkü weld'in `Enabled` özelliği okunana kadar boş kalıyordu ve taklit bunu kapalı sayıyordu. Bu yüzden K0.4.1'deki "NPC tek parça hareket eder" düzeltmesi harness'te fiilen denetlenmemişti; artık H21 başın kökle birlikte gittiğini denetliyor. `CFrame:Lerp` dönüşü eksen eksen karıştırıyordu, artık tek eksen etrafında dönüyor. ScreenGui `AbsoluteSize` ve `CFrame.lookAt` eklendi. Ekran alanı 58 px üst çubuk varsayımıyla kuruluyor.
+- **Harness senaryoları.**
+  - **H12** yeniden yazıldı. Üç ekranda panellerin ekranda kaldığını ve çakışmadığını, düğmelerin en az 44×44 px olduğunu ölçüyor. Telefonda düğmeler ve kutular zıplama düğmesine girmemeli.
+  - **H20:** dokunmatik cihazda hiçbir talimat tuş adı söylemiyor; klavyede kısayollar duruyor.
+  - **H21:** yürüyen figür yürüdüğü yöne bakıyor; tezgâhtaki müşteri ile kasiyer birbirine bakıyor.
+  - **H15** telefon kutularıyla ölçüyor.
+  - **H19** siluet farkını figürün kendi çerçevesinde hesaplıyor, çünkü figür artık dönüyor. Alıcı/pazarlıkçı farkı %16 (eşik %12).
+
+  Sonuç: iki sinyal modunda **35/35 PASS**. Bilinçli bozma denemelerinin hepsi yakalandı: eski HUD, 40 px düğme, zıplama köşesine giren kutu, her cihazda kısayol numarası, sunucu bildiriminde E, eski `moveNpc`, tezgâhta dönmeyen müşteri ve weld hatası.
+- **Doğrulayıcı.** `validate_package.py` yeni "K0.4.4 telefon önce" bölümüyle şunları reddediyor: sunucu metninde tuş adı, HUD'da klavye koşulu dışında tuş adı, numaralı başlangıç düğme metni, `ViewportSize` kullanımı, 44 px sabitinin yokluğu, yöne dönmeyen `moveNpc` ve tezgâhta dönüşün eksikliği. Dört bozma denemesiyle sınandı.
+- **Ekonomi değişmedi.** Aynı tohumla müşteri dizisi (H10) ve 20 dakikalık oturum özeti (H11) K0.4.3 ile birebir aynı. Attribute yazımı 5 010'da kaldı. Parça yazımı dönüş tween'leri yüzünden 79 302'den Deferred modda 79 791'e, Immediate modda 79 876'ya çıktı. Cihaz etkisi ölçülmedi.
+- **Açık kalan.** Telefonda durum paneli ekrana sığmak için küçülüyor. En küçük yazı tahminde 740×360'ta 11 px, 568×320'de 9 px. Paneli telefonda sadeleştirmek bir tasarım kararıdır ve cihaz testine bırakıldı: [`PRODUCTION/K0.4_KNOWN_LIMITATIONS.md`](PRODUCTION/K0.4_KNOWN_LIMITATIONS.md) §10.
+- **Durum:** `HARNESS VERIFIED` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Bütün ölçüler hesaptır. 58 px üst çubuk ve zıplama düğmesinin yeri varsayımdır; zıplama değerleri Roblox PlayerModule kaynağından alındı. Test planına Aşama 3'te dört satır eklendi: [`PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](PRODUCTION/K0.4_NEXT_TEST_PLAN.md).
+
+---
+
 ## 27 Eylül 2026 — K0.4.3: okunabilirlik gri kutusu
 
 [`PRODUCTION/K0.4_ASSET_REQUIREMENTS.md`](PRODUCTION/K0.4_ASSET_REQUIREMENTS.md) öncelik 1'de iki okunabilirlik açığı vardı. Pazarlıkçı ile normal alıcı aynı kutu-insandı, bu yüzden oyuncu kimin geldiğini ancak teklif kartını açınca öğreniyordu. HUD da tamamen metindi. İkisi varlık beklemeden gri kutu olarak kodla kapatıldı. Ekonomi değerleri ve kuralları değişmedi. Kaynak sürümü `K0-market-0.4.3`.
