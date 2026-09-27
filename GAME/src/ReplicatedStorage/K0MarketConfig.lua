@@ -2,7 +2,7 @@
 -- Production values remain separate from compressed prototype values so playtest
 -- tuning cannot be mistaken for the live economy baseline.
 return {
-    Version = "K0-market-0.4.6",
+    Version = "K0-market-0.4.7",
 
     Production = {
         ShiftSeconds = 2880,
@@ -116,5 +116,16 @@ return {
         Notify = {Id = "rbxassetid://9119982749", Volume = 0.14},
         PermitLapse = {Id = "rbxassetid://9125606141", Volume = 0.18},
         Liquidate = {Id = "rbxassetid://9113579415", Volume = 0.51},
+    },
+
+    -- K0.4.7 music (ASSET-PROMPTS/05-MUSIC.md): the two priority-1 pieces, as
+    -- Creator Store CANDIDATES from the APM Music partner library, chosen by
+    -- description and measurement only and not listened to yet
+    -- (PRODUCTION/ASSET_PROVENANCE.md). The session owner hears the market loop
+    -- from joining and the sale cue with each sale. Volume puts the loop under every
+    -- sound cue and the sale cue 3 dB under the loop (05); an empty Id is silent.
+    Music = {
+        MarketDay = {Id = "rbxassetid://131370222076689", Volume = 0.098, Looped = true},
+        SaleCue = {Id = "rbxassetid://9048750277", Volume = 0.043},
     },
 }

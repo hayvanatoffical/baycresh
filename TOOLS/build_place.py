@@ -2,7 +2,7 @@
 """Build K0 Roblox place files without Roblox Studio, then verify them.
 
 Runs the real scene builders in Lune (open-source Luau runtime with Roblox's
-DOM, rbx-dom), installs the three active runtime sources at their Studio paths
+DOM, rbx-dom), installs the four active runtime sources at their Studio paths
 and writes a binary .rbxl per test profile under dist/place/. See
 TOOLS/place_build/README.md.
 
@@ -45,6 +45,8 @@ SCRIPTS = [
     ("Script", "K0Market", "ServerScriptService", "GAME/src/ServerScriptService/K0Market.server.lua", False),
     ("LocalScript", "K0MarketHUD", "StarterPlayer/StarterPlayerScripts",
      "GAME/src/StarterPlayerScripts/K0MarketHUD.client.lua", False),
+    ("LocalScript", "K0NpcMotion", "StarterPlayer/StarterPlayerScripts",
+     "GAME/src/StarterPlayerScripts/K0NpcMotion.client.lua", False),
 ]
 
 # Test profiles replace the Edit-mode copy edits of PRODUCTION/K0.4_NEXT_TEST_PLAN.md.

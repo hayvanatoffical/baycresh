@@ -243,16 +243,26 @@ local function setBoardDetail(part, text)
     end
 end
 
+-- K0.4.7 (PROP-PRICE-TAG: "talep bonusu burada görünüyor"): the tag of the
+-- product in demand says so in a second line and turns green, like the HUD
+-- demand row; the other tag stays one cream line. The line, not the colour
+-- alone, carries the meaning.
+local TAG_CREAM = Color3.fromRGB(232, 220, 200)
+local TAG_DEMAND = Color3.fromRGB(162, 196, 139)
+
 local function setPriceTag(part, sku)
     if not part then return end
     local product = C.Products[sku]
-    local multiplier = sku == state.demandSKU and (1 + C.DemandBonusRatio) or 1
+    local boosted = sku == state.demandSKU
+    local multiplier = boosted and (1 + C.DemandBonusRatio) or 1
     local price = math.max(1, math.floor(product.Retail * multiplier + 0.5))
+    local line = string.upper(product.Name) .. " " .. price .. " ₡/" .. product.Unit
     for _, gui in ipairs(part:GetChildren()) do
         if gui:IsA("SurfaceGui") then
             local text = gui:FindFirstChild("Price")
             if text and text:IsA("TextLabel") then
-                text.Text = string.upper(product.Name) .. " " .. price .. " ₡/" .. product.Unit
+                text.Text = boosted and (line .. "\nTALEP +" .. math.floor(C.DemandBonusRatio * 100 + 0.5) .. "%") or line
+                text.TextColor3 = boosted and TAG_DEMAND or TAG_CREAM
             end
         end
     end
@@ -442,6 +452,34 @@ looks.Pedestrian = looks.Passerby
 local warmBrown = Color3.fromRGB(104, 74, 52)
 local canopyTerracotta = Color3.fromRGB(163, 74, 50)
 
+-- K0.4.7 greybox rig (ASSET-PROMPTS/04-ANIMATION.md). The anchored root still
+-- carries the whole figure and is the only part the server moves. Five Motor6D
+-- joints (waist, two shoulders, two hips) let every client swing the limbs
+-- locally (StarterPlayerScripts/K0NpcMotion); Motor6D.Transform is not
+-- replicated, so the animation adds no network traffic. The other parts are
+-- welded to the part they belong to: head, hair, cap, eyes and apron to the
+-- torso, each shoe to its leg, the tote to the hand that carries it. At spawn
+-- every part sits exactly where K0.4.6 put it. `pivot` is the joint position
+-- in the figure's own space.
+local function joint(model, name, part0, part1, pivot)
+    local at = CFrame.new(model.PrimaryPart.Position + pivot)
+    local motor = Instance.new("Motor6D")
+    motor.Name = name
+    motor.Part0 = part0
+    motor.Part1 = part1
+    motor.C0 = part0.CFrame:ToObjectSpace(at)
+    motor.C1 = part1.CFrame:ToObjectSpace(at)
+    motor.Parent = part1
+    return motor
+end
+
+local function weld(base, part)
+    local w = Instance.new("WeldConstraint")
+    w.Part0 = base
+    w.Part1 = part
+    w.Parent = part
+end
+
 local function makeNpc(name, position, role)
     local look = looks[role] or looks.Passerby
     local style = role == "Worker" and 2 or cosmeticRng:NextInteger(1, 4)
@@ -455,47 +493,64 @@ local function makeNpc(name, position, role)
     root.Transparency = 1
     model.PrimaryPart = root
     local shoulder = bargainer and 1.08 or 0.98
-    npcPart(model, "Torso", bargainer and Vector3.new(1.78, 1.72, 0.86) or Vector3.new(1.55, 1.7, 0.75), Vector3.new(0, 0.12, 0), shirt, position)
-    npcPart(model, "Head", Vector3.new(1.15, 1.15, 1.15), Vector3.new(0, 1.56, 0), skin, position, Enum.PartType.Ball)
+    local torso = npcPart(model, "Torso", bargainer and Vector3.new(1.78, 1.72, 0.86) or Vector3.new(1.55, 1.7, 0.75), Vector3.new(0, 0.12, 0), shirt, position)
+    local onTorso = {npcPart(model, "Head", Vector3.new(1.15, 1.15, 1.15), Vector3.new(0, 1.56, 0), skin, position, Enum.PartType.Ball)}
     if bargainer then
-        npcPart(model, "ShirtFront", Vector3.new(0.44, 1.56, 0.06), Vector3.new(0, 0.14, -0.45), Color3.fromRGB(150, 112, 80), position)
-        npcPart(model, "Cap", Vector3.new(1.24, 0.24, 1.24), Vector3.new(0, 2.1, 0.02), warmBrown, position)
-        npcPart(model, "CapBrim", Vector3.new(1.0, 0.08, 0.56), Vector3.new(0, 2.0, -0.74), warmBrown, position)
+        table.insert(onTorso, npcPart(model, "ShirtFront", Vector3.new(0.44, 1.56, 0.06), Vector3.new(0, 0.14, -0.45), Color3.fromRGB(150, 112, 80), position))
+        table.insert(onTorso, npcPart(model, "Cap", Vector3.new(1.24, 0.24, 1.24), Vector3.new(0, 2.1, 0.02), warmBrown, position))
+        table.insert(onTorso, npcPart(model, "CapBrim", Vector3.new(1.0, 0.08, 0.56), Vector3.new(0, 2.0, -0.74), warmBrown, position))
     else
-        npcPart(model, "Hair", Vector3.new(1.18, 0.48, 1.17), Vector3.new(0, 2.05, 0), Color3.fromRGB(47 + style * 9, 41 + style * 6, 38 + style * 4), position, Enum.PartType.Ball)
+        table.insert(onTorso, npcPart(model, "Hair", Vector3.new(1.18, 0.48, 1.17), Vector3.new(0, 2.05, 0), Color3.fromRGB(47 + style * 9, 41 + style * 6, 38 + style * 4), position, Enum.PartType.Ball))
     end
+    local arms, legs, armPivots, attached = {}, {}, {}, {}
     for _, side in ipairs({-1, 1}) do
         local arm = Vector3.new(side * shoulder, 0.04, 0)
+        -- A hanging arm turns at its top; the bargainer's raised arm at the shoulder.
+        local pivot = Vector3.new(arm.X, 0.72, 0)
         if bargainer and side == 1 then
             arm = Vector3.new(shoulder, 0.58, -0.2)
+            pivot = Vector3.new(shoulder, 0.75, -0.2)
         elseif role == "Browser" then
             arm = Vector3.new(side * 0.9, 0.04, 0.24)
+            pivot = Vector3.new(arm.X, 0.72, 0.24)
         end
-        npcPart(model, "Arm", Vector3.new(0.42, 1.55, 0.48), arm, skin, position)
-        npcPart(model, "Leg", Vector3.new(0.58, 1.6, 0.62), Vector3.new(side * 0.40, -1.62, 0), look.legs, position)
-        npcPart(model, "Shoe", Vector3.new(0.62, 0.22, 0.82), Vector3.new(side * 0.40, -2.47, -0.12), Color3.fromRGB(48, 43, 43), position)
-        npcPart(model, "Eye", Vector3.new(0.095, 0.11, 0.05), Vector3.new(side * 0.25, 1.67, -0.54), Color3.fromRGB(40, 39, 36), position, Enum.PartType.Ball)
+        arms[side] = npcPart(model, "Arm", Vector3.new(0.42, 1.55, 0.48), arm, skin, position)
+        armPivots[side] = pivot
+        legs[side] = npcPart(model, "Leg", Vector3.new(0.58, 1.6, 0.62), Vector3.new(side * 0.40, -1.62, 0), look.legs, position)
+        attached[npcPart(model, "Shoe", Vector3.new(0.62, 0.22, 0.82), Vector3.new(side * 0.40, -2.47, -0.12), Color3.fromRGB(48, 43, 43), position)] = legs[side]
+        table.insert(onTorso, npcPart(model, "Eye", Vector3.new(0.095, 0.11, 0.05), Vector3.new(side * 0.25, 1.67, -0.54), Color3.fromRGB(40, 39, 36), position, Enum.PartType.Ball))
     end
     if role == "Buyer" then
-        npcPart(model, "Tote", Vector3.new(0.95, 1.0, 0.3), Vector3.new(-1.28, -0.8, -0.05), Color3.fromRGB(206, 192, 155), position)
-        npcPart(model, "ToteHandle", Vector3.new(0.13, 0.62, 0.16), Vector3.new(-1.28, -0.02, -0.05), Color3.fromRGB(181, 166, 135), position)
+        attached[npcPart(model, "Tote", Vector3.new(0.95, 1.0, 0.3), Vector3.new(-1.28, -0.8, -0.05), Color3.fromRGB(206, 192, 155), position)] = arms[-1]
+        attached[npcPart(model, "ToteHandle", Vector3.new(0.13, 0.62, 0.16), Vector3.new(-1.28, -0.02, -0.05), Color3.fromRGB(181, 166, 135), position)] = arms[-1]
     elseif role == "Worker" then
-        npcPart(model, "Apron", Vector3.new(1.3, 1.85, 0.08), Vector3.new(0, -0.35, -0.42), canopyTerracotta, position)
-        npcPart(model, "ApronStrap", Vector3.new(0.95, 0.14, 0.08), Vector3.new(0, 0.8, -0.42), canopyTerracotta, position)
+        table.insert(onTorso, npcPart(model, "Apron", Vector3.new(1.3, 1.85, 0.08), Vector3.new(0, -0.35, -0.42), canopyTerracotta, position))
+        table.insert(onTorso, npcPart(model, "ApronStrap", Vector3.new(0.95, 0.14, 0.08), Vector3.new(0, 0.8, -0.42), canopyTerracotta, position))
     end
-    -- One anchored root carries the whole figure (see moveNpc).
     for _, part in ipairs(model:GetChildren()) do
         if part:IsA("BasePart") and part ~= root then
             part.Anchored = false
             part.Massless = true
-            local weld = Instance.new("WeldConstraint")
-            weld.Part0 = root
-            weld.Part1 = part
-            weld.Parent = part
         end
     end
+    for _, part in ipairs(onTorso) do attached[part] = torso end
+    for part, base in pairs(attached) do weld(base, part) end
+    joint(model, "Waist", root, torso, Vector3.new(0, -0.7, 0))
+    joint(model, "ShoulderL", torso, arms[-1], armPivots[-1])
+    joint(model, "ShoulderR", torso, arms[1], armPivots[1])
+    joint(model, "HipL", root, legs[-1], Vector3.new(-0.40, -0.86, 0))
+    joint(model, "HipR", root, legs[1], Vector3.new(0.40, -0.86, 0))
     model.Parent = scene
     return model
+end
+
+-- K0.4.7: counts handovers on a figure. Each client plays the cashier's
+-- ANIM-HAND-ITEM or the customer's ANIM-RECEIVE-ITEM when the count changes.
+-- One attribute write per figure and sale.
+local function handover(model)
+    if model and model.Parent then
+        model:SetAttribute("K0Handover", (model:GetAttribute("K0Handover") or 0) + 1)
+    end
 end
 
 local function bubble(model, message)
@@ -529,9 +584,9 @@ end
 
 -- K0.4 tweened a CFrameValue and re-pivoted every anchored part of the figure
 -- (up to 17) on each step, so each part's CFrame was written and replicated
--- separately. The parts are welded to one anchored root now and only the root
--- is tweened. The harness counts the drop in writes; the device and network
--- effect is not measured yet.
+-- separately. The parts hang off one anchored root now (welds; K0.4.7 limb
+-- joints) and only the root is tweened. The harness counts the drop in writes;
+-- the device and network effect is not measured yet.
 --
 -- K0.4.4: the figure's front is -Z (eyes, cap brim, apron), which is also a
 -- CFrame's LookVector. K0.4.3 tweened position only, so every figure faced -Z:
@@ -622,6 +677,8 @@ local function completeSale(price, byWorker)
     updateDisplays()
     sync()
     feedback(price, offer.sku)
+    handover(visitor)
+    if byWorker then handover(worker) end
     bubble(visitor, byWorker and "Teşekkürler!" or "Anlaştık!")
     notice((byWorker and "Kasiyer: " or "Satış: ") .. C.Products[offer.sku].Name .. " " .. offer.units .. " " .. C.Products[offer.sku].Unit .. " / +" .. price .. " ₡")
     return true

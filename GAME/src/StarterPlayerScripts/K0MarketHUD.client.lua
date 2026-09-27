@@ -130,6 +130,37 @@ local drawIcon = {
         local level = shape(box, "Level", 6, 18, 12, 21, good, UDim.new(0, 3))
         level.AnchorPoint = Vector2.new(0.5, 1)
     end,
+    -- K0.4.7: the priority-2 set. Two shelves, the upper one shorter: the stall
+    -- gained a level (not a star or a number).
+    Level = function(box)
+        shape(box, "ShelfLow", 20, 4, 12, 18, cream, UDim.new(0, 1))
+        shape(box, "ShelfHigh", 13, 4, 12, 9, cream, UDim.new(0, 1))
+    end,
+    -- A bust whose apron is the identifying feature, as on the cashier figure.
+    Worker = function(box)
+        shape(box, "Head", 8, 8, 12, 5, cream, ROUND)
+        shape(box, "Shoulders", 20, 12, 12, 18, cream, UDim.new(0, 5))
+        shape(box, "ApronBib", 6, 5, 12, 16, accent)
+        shape(box, "Apron", 10, 6, 12, 21, accent)
+    end,
+    -- Accept, counter and decline sit on coloured buttons, so they are drawn in
+    -- the button text colour. The check and the X differ by silhouette.
+    Accept = function(box)
+        shape(box, "Short", 4, 8, 8, 15, cream, nil, -45)
+        shape(box, "Long", 4, 15, 14, 12, cream, nil, 45)
+    end,
+    Counter = function(box)
+        shape(box, "ShaftTop", 14, 3, 10, 8, cream)
+        shape(box, "HeadTopA", 3, 7, 18, 6, cream, nil, -45)
+        shape(box, "HeadTopB", 3, 7, 18, 10, cream, nil, 45)
+        shape(box, "ShaftLow", 14, 3, 14, 16, cream)
+        shape(box, "HeadLowA", 3, 7, 6, 14, cream, nil, 45)
+        shape(box, "HeadLowB", 3, 7, 6, 18, cream, nil, -45)
+    end,
+    Decline = function(box)
+        shape(box, "BarA", 4, 22, 12, 12, cream, nil, 45)
+        shape(box, "BarB", 4, 22, 12, 12, cream, nil, -45)
+    end,
 }
 
 local function icon(parent, kind, x, y)
@@ -169,17 +200,21 @@ local goalLabel = label(status, "Goal", "Hedef", 251, 52, 14, accent)
 
 local statusIcons = {
     icon(status, "Cash", 14, 44),
+    icon(status, "Level", 14, 75),
     icon(status, "Permit", 14, 101),
     icon(status, "DemandUp", 14, 127),
     icon(status, "Orange", 14, 153),
     icon(status, "Bread", 204, 153),
+    icon(status, "Worker", 14, 225),
 }
 indent(cashLabel, 46)
+indent(ownershipLabel, 46)
 indent(permitLabel, 46)
 indent(demandLabel, 46)
 indent(stockLabel, 46)
 stockLabel.Size = UDim2.fromOffset(150, 24)
 indent(breadLabel, 236)
+indent(workerLabel, 46)
 
 local track = Instance.new("Frame")
 track.Name = "UpgradeTrack"
@@ -233,28 +268,41 @@ do
     for i, profile in ipairs(ranked) do budgetFill[profile.Hint] = i / #ranked end
 end
 
-local function button(name, x, text)
+-- K0.4.7: each button carries its icon at the left edge and the text in a
+-- Caption label beside it. The button's own Text stays empty; a UIPadding would
+-- push the icon inside the padding too.
+local function button(name, x, text, kind)
     local b = Instance.new("TextButton")
     b.Name = name
     b.Position = UDim2.new(0, x, 0, 174)
     b.Size = UDim2.fromOffset(146, 54)
     b.BackgroundColor3 = Color3.fromRGB(160, 83, 59)
-    b.TextColor3 = cream
-    b.Text = text
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 15
-    b.TextWrapped = true
+    b.Text = ""
     b.Parent = offer
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 9)
     corner.Parent = b
-    return b
+    local caption = Instance.new("TextLabel")
+    caption.Name = "Caption"
+    caption.Position = UDim2.fromOffset(34, 0)
+    caption.Size = UDim2.new(1, -40, 1, 0)
+    caption.BackgroundTransparency = 1
+    caption.TextColor3 = cream
+    caption.Text = text
+    caption.Font = Enum.Font.GothamBold
+    caption.TextSize = 15
+    caption.TextWrapped = true
+    caption.Parent = b
+    local mark = icon(b, kind, 8, 0)
+    mark.AnchorPoint = Vector2.new(0, 0.5)
+    mark.Position = UDim2.new(0, 8, 0.5, 0)
+    return b, caption, mark
 end
 
 -- Texts are set on render: the 1/2/3 shortcut appears only with a keyboard.
-local accept = button("Accept", 14, "Sat")
-local counter = button("Counter", 172, "Karşı teklif")
-local decline = button("Decline", 330, "Reddet")
+local accept, acceptText, acceptMark = button("Accept", 14, "Sat", "Accept")
+local counter, counterText = button("Counter", 172, "Karşı teklif", "Counter")
+local decline, declineText = button("Decline", 330, "Reddet", "Decline")
 counter.BackgroundColor3 = Color3.fromRGB(92, 116, 77)
 decline.BackgroundColor3 = Color3.fromRGB(70, 76, 78)
 
@@ -402,18 +450,23 @@ gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 -- K0.4.2 sound cues (ASSET-PROMPTS/06-SFX.md). Sound only repeats what the HUD
 -- already shows (EKIP/06 §8), plays for the seller only, and never for the state
 -- found on the first render or after an owner handover.
+-- K0.4.7: the music slots (05-MUSIC.md) play through the same function from
+-- Config.Music.
 local sounds = {}
-local function play(name)
-    local spec = Config.Sounds and Config.Sounds[name]
+local function play(name, group)
+    local prefix = group == "Music" and "K0Music_" or "K0Sfx_"
+    local specs = group == "Music" and Config.Music or Config.Sounds
+    local spec = specs and specs[name]
     if type(spec) ~= "table" or type(spec.Id) ~= "string" or spec.Id == "" then return end
-    local sound = sounds[name]
+    local sound = sounds[prefix .. name]
     if not sound then
         sound = Instance.new("Sound")
-        sound.Name = "K0Sfx_" .. name
+        sound.Name = prefix .. name
         sound.SoundId = spec.Id
         sound.Volume = spec.Volume or 0.5
+        sound.Looped = spec.Looped == true
         sound.Parent = SoundService
-        sounds[name] = sound
+        sounds[prefix .. name] = sound
     end
     sound:Play()
 end
@@ -439,7 +492,10 @@ local function flushCues()
     for _, name in ipairs(CUE_ORDER) do
         if batch[name] then play(name) end
     end
-    if batch.SaleSuccess then task.delay(CASH_AFTER_SALE, play, "Cash") end
+    if batch.SaleSuccess then
+        play("SaleCue", "Music") -- MUS-SALE-CUE, under the sale sound
+        task.delay(CASH_AFTER_SALE, play, "Cash")
+    end
 end
 
 local function want(name)
@@ -450,10 +506,17 @@ local function want(name)
     pending[name] = true
 end
 
+local marketMusic = false
 local function listen()
     if player:GetAttribute("K0Owner") ~= true then
         heard = nil
         return
+    end
+    if not marketMusic then
+        -- MUS-MARKET-DAY: ambience, not an event cue, so it starts with the first
+        -- render as the session owner and loops under everything else.
+        marketMusic = true
+        play("MarketDay", "Music")
     end
     local now = {
         sales = player:GetAttribute("K0Sales") or 0,
@@ -642,12 +705,14 @@ local function render()
         offerBread.Visible = sku == "bread"
         offerBudget.Visible = kind == "Bargainer" and budgetFill[signal] ~= nil
         budgetLevel.Size = UDim2.fromOffset(6, math.floor(18 * (budgetFill[signal] or 0) + 0.5))
-        accept.Text = available < units and "Stok yok" or (keyHint(1) .. "Sat  " .. bid .. " ₡")
+        acceptText.Text = available < units and "Stok yok" or (keyHint(1) .. "Sat  " .. bid .. " ₡")
+        -- No check mark on a sale that cannot happen.
+        acceptMark.Visible = available >= units
         accept.Active = available >= units
         accept.AutoButtonColor = available >= units
         counter.Visible = kind == "Bargainer"
-        counter.Text = keyHint(2) .. "Karşı teklif  " .. counterPrice .. " ₡"
-        decline.Text = keyHint(3) .. "Reddet"
+        counterText.Text = keyHint(2) .. "Karşı teklif  " .. counterPrice .. " ₡"
+        declineText.Text = keyHint(3) .. "Reddet"
         counter.Active = available >= units
         counter.AutoButtonColor = available >= units
     end

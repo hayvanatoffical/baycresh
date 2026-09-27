@@ -13,8 +13,8 @@ Roblox Studio yalnız Windows ve macOS'ta çalışır. Proje sahibinin şu an ya
 **4. katman — `TOOLS/build_place.py` (çevrimdışı, Roblox hesabı gerekmez)**
 
 - Beş sahne kurucusunu (`SCENE_BUILD`, `STALL_ART_BUILD`, `ART_V2_FIX`, `STALL_ART_V3`, `MARKET_SYSTEM_BUILD`) [Lune](https://github.com/lune-org/lune) içinde çalıştırır. Lune açık kaynaklı bir Luau çalışma ortamıdır. Roblox'un nesne modelinin açık kaynaklı karşılığını (rbx-dom) ve Roblox'un yansıma veritabanını kullanır. Bu yüzden yanlış yazılmış bir özellik adı veya yanlış tipte değer, Studio'da olduğu gibi hata verir.
-- Üç aktif kaynağı Studio'daki yerlerine koyar: `ReplicatedStorage/K0MarketConfig`, `ServerScriptService/K0Market`, `StarterPlayer/StarterPlayerScripts/K0MarketHUD`.
-- Her test profili için ikili bir `.rbxl` yazar: `dist/place/BAYCREST-K0.4.6-<profil>.rbxl` ve yanında `.manifest.json`.
+- Dört aktif kaynağı Studio'daki yerlerine koyar: `ReplicatedStorage/K0MarketConfig`, `ServerScriptService/K0Market`, `StarterPlayer/StarterPlayerScripts/K0MarketHUD` ve (K0.4.7) `StarterPlayer/StarterPlayerScripts/K0NpcMotion`.
+- Her test profili için ikili bir `.rbxl` yazar: `dist/place/BAYCREST-K0.4.7-<profil>.rbxl` ve yanında `.manifest.json`.
 - Her dosyayı doğrular:
   1. Her kurucu hatasız çalıştı.
   2. Dosya geri okununca nesne sayısı aynı.

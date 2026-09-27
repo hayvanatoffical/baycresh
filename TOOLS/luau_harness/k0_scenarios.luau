@@ -164,6 +164,43 @@ local function hudParts(w, p)
     return gui, gui and gui:FindFirstChild("Offer")
 end
 
+-- K0.4.7: the world price tag of the product in demand shows the boosted price
+-- and a second "TALEP +N%" line in green; the other tag is one cream line with
+-- the list price. Returns what differs for the given demand.
+local TAG_GREEN, TAG_CREAM = "a2c48b", "e8dcc8"
+local function priceTagProblems(w, demand)
+    local problems = {}
+    local pct = math.floor(C.DemandBonusRatio * 100 + 0.5)
+    for _, sku in ipairs({"orange", "bread"}) do
+        local name = sku == "orange" and "OrangePrice" or "BreadPrice"
+        local part = w:scene().ProductDisplays:FindFirstChild(name)
+        local label
+        for _, g in ipairs(part and part:GetChildren() or {}) do
+            if g:IsA("SurfaceGui") and g:FindFirstChild("Price") then label = g.Price end
+        end
+        local product = C.Products[sku]
+        local boosted = sku == demand
+        local price = math.max(1, math.floor(product.Retail * (boosted and 1 + C.DemandBonusRatio or 1) + 0.5))
+        if not label then
+            table.insert(problems, name .. " has no Price label")
+        else
+            local first, second = string.match(label.Text, "^([^\n]*)\n?(.*)$")
+            local ok = string.find(first, " " .. price .. " ₡/" .. product.Unit, 1, true) ~= nil
+                and string.find(first, string.upper(product.Name), 1, true) == 1
+            if boosted then
+                ok = ok and second == "TALEP +" .. pct .. "%" and label.TextColor3:ToHex() == TAG_GREEN
+            else
+                ok = ok and second == "" and label.TextColor3:ToHex() == TAG_CREAM
+            end
+            if not ok then
+                table.insert(problems, string.format("%s shows %q in #%s while %s is in demand", name,
+                    label.Text, label.TextColor3:ToHex(), demand))
+            end
+        end
+    end
+    return problems
+end
+
 -- Opens the offer at the stall and answers it through the HUD buttons.
 local function answerOffer(w, p, h, decide, think)
     local ok, why = go(w, p, h.sale)
@@ -393,6 +430,9 @@ scenario("H04", "Test-plan stage 1 smoke flow through prompts and HUD", nil, fun
     end
     check(boardText and string.find(boardText, string.upper(C.Products[demand].Name), 1, true) and string.find(boardText, "+15%", 1, true),
         "3 demand board names the demanded product and +15%: " .. tostring(boardText))
+    local tagIssues = priceTagProblems(w, demand)
+    check(#tagIssues == 0, "3 the demanded product's price tag shows the boosted price and a TALEP +15% line; the other tag one line: "
+        .. table.concat(tagIssues, "; "))
     -- 4 restock the demanded product
     local cashBefore = attr(p, "K0Cash")
     check(go(w, p, h[demand]), "4 wholesale prompt triggers (ActionText=" .. h[demand].ActionText .. ")")
@@ -1011,7 +1051,7 @@ scenario("H20", "Touch-only device: no instruction names a key; keyboard keeps i
             decide = function(pp)
                 offers += 1
                 for _, b in ipairs({gui.Offer.Accept, gui.Offer.Counter, gui.Offer.Decline}) do
-                    if b.Visible then buttons[b.Name .. ": " .. b.Text] = b.Text end
+                    if b.Visible then buttons[b.Name .. ": " .. b.Caption.Text] = b.Caption.Text end
                 end
                 return defaultDecision(pp)
             end,
@@ -1341,13 +1381,18 @@ end)
 
 -- Sound cues (K0.4.2) ---------------------------------------------------------
 -- The harness produces no audio; Sound:Play() is recorded with the calling client.
-local function plays(w, who, since)
+-- Sound cues are "K0Sfx_*"; the K0.4.7 music slots are "K0Music_*".
+local function playsOf(prefix, w, who, since)
     local list = {}
     for i, r in ipairs(w.world.soundPlays or {}) do
-        if i > (since or 0) and (who == nil or r.player == who) then table.insert(list, r) end
+        if i > (since or 0) and (who == nil or r.player == who) and string.sub(r.name, 1, #prefix) == prefix then
+            table.insert(list, r)
+        end
     end
     return list
 end
+local function plays(w, who, since) return playsOf("K0Sfx_", w, who, since) end
+local function musicPlays(w, who, since) return playsOf("K0Music_", w, who, since) end
 local function playMark(w) return #(w.world.soundPlays or {}) end
 local function cueName(r) return (string.gsub(r.name, "^K0Sfx_", "")) end
 local function cueCounts(list)
@@ -1378,8 +1423,17 @@ local function patchText(from, to)
     end
 end
 
-scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty id stays silent", nil, function(mode)
+scenario("H18", "Sound cues and music: one cue per event, seller only, silent start, empty id stays silent", nil, function(mode)
     check(type(CONFIG.Sounds) == "table", "config has a Sounds table")
+    local M = CONFIG.Music or {}
+    for _, n in ipairs({"MarketDay", "SaleCue"}) do
+        local spec = M[n]
+        check(type(spec) == "table" and type(spec.Id) == "string" and (spec.Id == "" or string.match(spec.Id, "^rbxassetid://%d+$") ~= nil)
+            and type(spec.Volume) == "number" and spec.Volume > 0 and spec.Volume <= 2,
+            "Music." .. n .. " has an rbxassetid (or empty) Id and a Volume in (0, 2]")
+    end
+    check(M.MarketDay and M.MarketDay.Looped == true and M.SaleCue and M.SaleCue.Looped ~= true,
+        "the market music loops and the sale cue does not")
     local names = {"SaleSuccess", "Cash", "UiClick", "StockPlace", "CustomerArrive", "SaleFail", "Negotiate",
         "Upgrade", "Hire", "Notify", "PermitLapse", "Liquidate"}
     for _, n in ipairs(names) do
@@ -1419,6 +1473,13 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
 
     world:advance(1)
     check(#plays(w) == 0, "joining plays no cue: " .. cueText(cueCounts(plays(w))))
+    -- The market loop is ambience, not an event cue: the session owner hears it
+    -- from joining, the spectator does not.
+    local started = musicPlays(w, "Seller1")
+    check(#started == 1 and started[1].name == "K0Music_MarketDay" and started[1].looped == true
+        and started[1].id == M.MarketDay.Id and started[1].volume == M.MarketDay.Volume and started[1].parent == "SoundService",
+        "the session owner hears the market loop from joining, looped, with its configured id and volume (" .. #started .. " plays)")
+    check(#musicPlays(w, "Watcher2") == 0, "the spectator hears no market loop")
 
     local m = playMark(w)
     go(w, p, h.claim)
@@ -1495,7 +1556,22 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
     end
     check(#wrong == 0, "every play uses its configured id and volume under SoundService" .. (#wrong > 0 and (": " .. table.concat(wrong, ", ")) or ""))
     check(#plays(w, "Watcher2") == 0, "the spectator hears nothing (" .. #plays(w, "Watcher2") .. " plays)")
-    note(string.format("20+ min: %d plays, %s", #all, cueText(c)))
+    -- Music: the loop was started once; the sale cue sounds with each sale sound.
+    local tunes = musicPlays(w, "Seller1")
+    local loops, cues, apart = 0, 0, 0
+    local saleAt = {}
+    for _, r in ipairs(all) do if cueName(r) == "SaleSuccess" then saleAt[r.t] = true end end
+    for _, r in ipairs(tunes) do
+        if r.name == "K0Music_MarketDay" then loops += 1 end
+        if r.name == "K0Music_SaleCue" then
+            cues += 1
+            if not saleAt[r.t] or r.id ~= M.SaleCue.Id or r.volume ~= M.SaleCue.Volume or r.looped then apart += 1 end
+        end
+    end
+    check(loops == 1, "the market loop is started once in the whole session (" .. loops .. ")")
+    check(cues == sales and apart == 0, "the sale cue plays with every sale sound, as configured (" .. cues .. " vs " .. sales .. ", " .. apart .. " wrong)")
+    check(#musicPlays(w, "Watcher2") == 0, "the spectator hears no music")
+    note(string.format("20+ min: %d plays, %s; music: loop x%d, sale cue x%d", #all, cueText(c), loops, cues))
     reportBag(bag)
 
     -- Handover: the new owner's fresh session is not replayed as events.
@@ -1506,6 +1582,8 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
     local extra = 0
     for name, k in pairs(after) do if name ~= "Notify" or k > 1 then extra += 1 end end
     check(extra == 0, "handover plays at most one notice cue for the new owner: " .. cueText(after))
+    local handed = musicPlays(w, "Watcher2", m)
+    check(#handed == 1 and handed[1].name == "K0Music_MarketDay", "the new owner hears the market loop once (" .. #handed .. " plays)")
     noScriptErrors(w)
     noUnexpectedWarnings(w)
 
@@ -1558,7 +1636,8 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
 
     -- An empty Id keeps its cue silent and creates no Sound.
     local stockId = CONFIG.Sounds.StockPlace.Id
-    local w2 = setup(mode, {configPatch = patchText('StockPlace = {Id = "' .. stockId .. '"', 'StockPlace = {Id = ""')})
+    local w2 = setup(mode, {configPatch = patches(patchText('StockPlace = {Id = "' .. stockId .. '"', 'StockPlace = {Id = ""'),
+        patchText('MarketDay = {Id = "' .. M.MarketDay.Id .. '"', 'MarketDay = {Id = ""'))})
     local p2 = w2:addPlayer("Seller1")
     local h2 = handles(w2)
     go(w2, p2, h2.claim)
@@ -1573,6 +1652,8 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
         if inst.Name == "K0Sfx_StockPlace" then made += 1 end
     end
     check(made == 0, "no Sound instance is created for an empty Id")
+    check(#musicPlays(w2) == 0 and w2.game:GetService("SoundService"):FindFirstChild("K0Music_MarketDay") == nil,
+        "an emptied market loop stays silent and creates no Sound")
     noScriptErrors(w2)
 end)
 
@@ -1617,7 +1698,8 @@ local function outlineDifference(a, b)
     return union > 0 and only / union or 0
 end
 
-local ICON_NAMES = {"IconCash", "IconPermit", "IconDemandUp", "IconOrange", "IconBread"}
+local ICON_NAMES = {"IconCash", "IconLevel", "IconPermit", "IconDemandUp", "IconOrange", "IconBread", "IconWorker"}
+local BUTTON_ICONS = {Accept = "IconAccept", Counter = "IconCounter", Decline = "IconDecline"}
 
 scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons and budget gauge follow state", nil, function(mode)
     local w = setup(mode)
@@ -1659,6 +1741,7 @@ scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons a
     -- The bot answers every offer; the decision hook inspects the open card first.
     local gui = w:hud(p)
     local offers, roleMismatch, iconMismatch, stockTextMismatch = 0, {}, {}, 0
+    local shortOffers, demandSeen, tagIssues = 0, {}, {}
     local function inspect(pp)
         offers += 1
         local kind, sku = attr(pp, "K0OfferType"), attr(pp, "K0OfferSKU")
@@ -1670,6 +1753,22 @@ scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons a
             table.insert(iconMismatch, "product icon for " .. sku)
         end
         if card.IconBudget.Visible ~= (kind == "Bargainer") then table.insert(iconMismatch, "budget gauge for " .. kind) end
+        -- K0.4.7: each button shows its icon beside a Caption label; the check
+        -- mark is left off a sale the stock cannot cover.
+        local enough = stockOf(pp, sku) >= attr(pp, "K0OfferUnits")
+        for buttonName, iconName in pairs(BUTTON_ICONS) do
+            local b = card[buttonName]
+            local mark = b:FindFirstChild(iconName)
+            local caption = b:FindFirstChild("Caption")
+            local want = buttonName ~= "Accept" or enough
+            if not mark or mark.Visible ~= want or mark.Size.X.Offset ~= 24 then
+                table.insert(iconMismatch, buttonName .. " icon" .. (enough and "" or " with short stock"))
+            end
+            if b.Text ~= "" or not caption or caption.Text == "" then table.insert(iconMismatch, buttonName .. " caption") end
+        end
+        if not enough then shortOffers += 1 end
+        demandSeen[attr(pp, "K0DemandSKU")] = true
+        for _, issue in ipairs(priceTagProblems(w, attr(pp, "K0DemandSKU"))) do table.insert(tagIssues, issue) end
         if not string.find(gui.Status.Stock.Text, " " .. attr(pp, "K0OrangeStock") .. " ", 1, true)
             or not string.find(gui.Status.BreadStock.Text, " " .. attr(pp, "K0BreadStock") .. " ", 1, true) then
             stockTextMismatch += 1
@@ -1683,7 +1782,10 @@ scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons a
     check(offers >= 10 and #roleMismatch == 0, string.format("each of %d offers came from a figure drawn as its kind%s", offers,
         #roleMismatch > 0 and (": " .. table.concat(roleMismatch, "; ")) or ""))
     check(browsersChecked >= 1 and browserMismatch == 0, string.format("each of %d browsers is drawn as a browser", browsersChecked))
-    check(#iconMismatch == 0, "offer card icons follow the product and the offer kind: " .. table.concat(iconMismatch, ", "))
+    check(#iconMismatch == 0, "offer card icons follow the product, the offer kind and the stock: " .. table.concat(iconMismatch, ", "))
+    check(demandSeen.orange and demandSeen.bread and #tagIssues == 0,
+        "price tags follow the demand for both products: " .. table.concat(tagIssues, "; "))
+    note(string.format("offer card: %d offers, %d with short stock", offers, shortOffers))
     check(stockTextMismatch == 0, "stock labels show the current orange and bread stock")
     for _, role in ipairs({"Buyer", "Bargainer", "Browser", "Passerby", "Pedestrian"}) do
         check(shapes[role] ~= nil, role .. " figure seen (" .. (counts[role] or 0) .. ")")
@@ -1720,6 +1822,38 @@ scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons a
     check(fruit.X.Offset == fruit.Y.Offset and loaf.X.Offset >= 1.5 * loaf.Y.Offset,
         string.format("orange icon is round (%dx%d), bread icon is long (%dx%d)", fruit.X.Offset, fruit.Y.Offset, loaf.X.Offset, loaf.Y.Offset))
     noScriptErrors(w)
+
+    -- Short stock: with bread only on the shelf, an orange order cannot be met.
+    -- The card then says "Stok yok" without the check mark; every offer is
+    -- declined so the bread stock stays and the next short order can come.
+    local w4 = setup(mode)
+    local p4 = w4:addPlayer("Seller1")
+    local h4 = handles(w4)
+    go(w4, p4, h4.claim)
+    go(w4, p4, h4.permit)
+    go(w4, p4, h4.bread)
+    local card4 = w4:hud(p4).Offer
+    local short, full, shortWrong = 0, 0, {}
+    local guard4 = 0
+    while (short == 0 or full == 0) and guard4 < 40 do
+        guard4 += 1
+        if not w4.world:runUntil(function() return attr(p4, "K0CustomerReady") == true end, 120) then break end
+        answerOffer(w4, p4, h4, function(pp)
+            local enough = stockOf(pp, attr(pp, "K0OfferSKU")) >= attr(pp, "K0OfferUnits")
+            if enough then full += 1 else short += 1 end
+            local caption = card4.Accept.Caption.Text
+            if card4.Accept.IconAccept.Visible ~= enough or (caption == "Stok yok") == enough or card4.Accept.Active ~= enough then
+                table.insert(shortWrong, string.format("%s stock: icon %s, caption %q", enough and "enough" or "short",
+                    tostring(card4.Accept.IconAccept.Visible), caption))
+            end
+            return "decline"
+        end)
+    end
+    check(short > 0 and full > 0 and #shortWrong == 0, string.format(
+        "accept shows its check mark only when the stock covers the order (%d short, %d covered offers)%s",
+        short, full, #shortWrong > 0 and (": " .. table.concat(shortWrong, "; ")) or ""))
+    note(string.format("short-stock card: %d short and %d covered offers, all declined", short, full))
+    noScriptErrors(w4)
 
     -- Worker figure: a cashier gets the apron.
     local w3 = setup(mode, {configPatch = patchNumber("StartingCash", C.PermitFee + C.UpgradeCost + C.HireCost + 150)})
@@ -1765,6 +1899,173 @@ scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons a
     end
     check(unstable == 0, "the same signal always shows the same fill")
     noScriptErrors(w2)
+end)
+
+-- Rotation about a joint's own X axis, for a Transform built as CFrame.Angles(a, 0, 0).
+local function pitchOf(c)
+    local _, _, _, _, _, _, _, _, _, _, r21, r22 = c:GetComponents()
+    return math.atan2(r21, r22)
+end
+
+scenario("H22", "Greybox animation: rigged figures walk, idle, wait and hand over the goods; the pose is client-local", nil, function(mode)
+    -- Frequent buyers and ample cash, so the cashier serves while the frames run.
+    local w = setup(mode, {configPatch = patches(patchNumber("StartingCash", 1500),
+        patchText("Buyer = 32, Bargainer = 18}", "Buyer = 300, Bargainer = 60}"))})
+    local p = w:addPlayer("Seller1")
+    local h = handles(w)
+    local scene = w:scene()
+    local rs = w.game:GetService("RunService")
+    w.world:startFrames(30)
+
+    -- Rig contract: five joints inside the figure; limbs hang on joints, not on
+    -- the root; each shoe hangs on its leg.
+    local JOINTS = {"Waist", "ShoulderL", "ShoulderR", "HipL", "HipR"}
+    local rigIssues, figures, figs = {}, 0, {}
+    local function jointFor(m, part)
+        for _, d in ipairs(part:GetChildren()) do
+            if d:IsA("Motor6D") and d.Part1 == part then return d end
+        end
+        return nil
+    end
+    local function watch(m)
+        if m:GetAttribute("NpcRole") == nil or figs[m] then return end
+        figures += 1
+        local f = {model = m, role = m:GetAttribute("NpcRole"), joints = {}, still = 0, handoverAt = nil}
+        for _, name in ipairs(JOINTS) do
+            local j = m:FindFirstChild(name, true)
+            if j and j:IsA("Motor6D") and j.Part0 and j.Part1 and j.Part0:IsDescendantOf(m) and j.Part1:IsDescendantOf(m) then
+                f.joints[name] = j
+            else
+                table.insert(rigIssues, m.Name .. " " .. name)
+            end
+        end
+        for _, part in ipairs(m:GetChildren()) do
+            if part:IsA("BasePart") and (part.Name == "Arm" or part.Name == "Leg" or part.Name == "Torso") then
+                if not jointFor(m, part) then table.insert(rigIssues, m.Name .. " " .. part.Name .. " has no joint") end
+                for _, c in ipairs(part:GetChildren()) do
+                    if c:IsA("WeldConstraint") then table.insert(rigIssues, m.Name .. " " .. part.Name .. " also welded") end
+                end
+            elseif part.Name == "Shoe" then
+                local weld = part:FindFirstChildOfClass("WeldConstraint")
+                if not (weld and weld.Part0 and weld.Part0.Name == "Leg") then table.insert(rigIssues, m.Name .. " shoe not on its leg") end
+            end
+        end
+        f.leg = f.joints.HipL and f.joints.HipL.Part1
+        m:GetAttributeChangedSignal("K0Handover"):Connect(function() f.handoverAt = w.world.now; f.reach = 0 end)
+        figs[m] = f
+    end
+    scene.ChildAdded:Connect(watch)
+
+    local walkFrames, standFrames, stat = 0, 0, {
+        hipMax = 0, legOpposed = 0, armOpposed = 0, footSide = 0, footForward = 0, shoeApart = 0,
+        standHip = 0, idleRange = {}, waitRoll = 0, idleRoll = 0, handovers = {}, badReturn = 0}
+    local last = {}
+    rs.PreRender:Connect(function(dt)
+        for m, f in pairs(figs) do
+            if not m.Parent or not m.PrimaryPart then figs[m] = nil; continue end
+            local root = m.PrimaryPart
+            local pos = root.Position
+            local prev = last[m]
+            last[m] = pos
+            if not prev or dt <= 0 then continue end
+            local speed = Vector3.new(pos.X - prev.X, 0, pos.Z - prev.Z).Magnitude / dt
+            local j = f.joints
+            if not (j.HipL and j.HipR and j.ShoulderL and j.ShoulderR and j.Waist) then continue end
+            local hipL, hipR = pitchOf(j.HipL.Transform), pitchOf(j.HipR.Transform)
+            if speed > 2 then
+                f.still = 0
+                walkFrames += 1
+                stat.hipMax = math.max(stat.hipMax, math.abs(hipL))
+                if math.abs(hipL + hipR) > 0.01 then stat.legOpposed += 1 end
+                if f.role ~= "Browser" and f.role ~= "Bargainer" and not f.handoverAt
+                    and pitchOf(j.ShoulderL.Transform) * hipL > 1e-4 then
+                    stat.armOpposed += 1
+                end
+                -- The foot moves along the walking direction, never sideways.
+                local foot = root.CFrame:PointToObjectSpace(f.leg.CFrame * Vector3.new(0, -0.8, 0))
+                stat.footSide = math.max(stat.footSide, math.abs(math.abs(foot.X) - 0.40))
+                stat.footForward = math.max(stat.footForward, math.abs(foot.Z))
+            elseif speed < 0.01 then
+                f.still += dt
+                if f.still > 1.5 then
+                    standFrames += 1
+                    stat.standHip = math.max(stat.standHip, math.abs(hipL), math.abs(hipR))
+                end
+                if f.still > 0.4 then
+                    local _, _, _, _, _, _, _, _, _, _, r21 = j.Waist.Transform:GetComponents()
+                    local range = stat.idleRange[f.role] or {math.huge, -math.huge}
+                    range[1], range[2] = math.min(range[1], r21), math.max(range[2], r21)
+                    stat.idleRange[f.role] = range
+                    local _, _, _, _, r01 = j.Waist.Transform:GetComponents()
+                    if f.role == "Worker" then stat.idleRoll = math.max(stat.idleRoll, math.abs(r01))
+                    elseif f.role == "Buyer" or f.role == "Bargainer" then stat.waitRoll = math.max(stat.waitRoll, math.abs(r01)) end
+                end
+            end
+            -- Every shoe stays on its leg whatever the pose.
+            for _, part in ipairs(m:GetChildren()) do
+                if part.Name == "Shoe" then
+                    local weld = part:FindFirstChildOfClass("WeldConstraint")
+                    local leg = weld and weld.Part0
+                    if leg and (leg.CFrame * Vector3.new(0, -0.85, -0.12) - part.Position).Magnitude > 0.05 then stat.shoeApart += 1 end
+                end
+            end
+            if f.handoverAt then
+                local since = w.world.now - f.handoverAt
+                local arm = f.role == "Worker" and j.ShoulderR or j.ShoulderL
+                if since <= 1.2 then
+                    f.reach = math.max(f.reach, pitchOf(arm.Transform))
+                elseif since >= 1.3 then
+                    table.insert(stat.handovers, {role = f.role, reach = f.reach})
+                    if math.abs(pitchOf(arm.Transform)) > 0.5 then stat.badReturn += 1 end
+                    f.handoverAt = nil
+                end
+            end
+        end
+    end)
+
+    -- Seller answers every customer, then leaves buyers to the cashier.
+    go(w, p, h.claim)
+    go(w, p, h.permit)
+    go(w, p, h.orange)
+    go(w, p, h.upgrade)
+    go(w, p, h.hire)
+    -- The ledger check is left out: the patched start cash is not C.StartingCash.
+    playFor(w, p, h, 150)
+    local soldBySeller = attr(p, "K0Sales")
+    playFor(w, p, h, 150, {ignoreCustomers = true})
+
+    check(figures >= 10, "figures seen (" .. figures .. ")")
+    check(#rigIssues == 0, "every figure has waist, shoulder and hip joints; limbs hang on joints, shoes on legs"
+        .. (#rigIssues > 0 and (":\n      - " .. table.concat(rigIssues, "\n      - ")) or ""))
+    check(walkFrames > 300, "walking frames sampled (" .. walkFrames .. ")")
+    check(stat.hipMax > 0.35, string.format("walking swings the legs (%.2f rad at most)", stat.hipMax))
+    check(stat.legOpposed == 0, "the two legs swing in opposition (" .. stat.legOpposed .. " frames not)")
+    check(stat.armOpposed == 0, "each arm swings against the leg on its side (" .. stat.armOpposed .. " frames not)")
+    check(stat.footSide < 0.02 and stat.footForward > 0.3,
+        string.format("the foot moves along the walking direction (forward %.2f studs, sideways %.3f)", stat.footForward, stat.footSide))
+    check(stat.shoeApart == 0, "shoes stay on the legs in every pose (" .. stat.shoeApart .. " frames not)")
+    check(standFrames > 100 and stat.standHip < 0.03,
+        string.format("standing figures keep their legs still (%d frames, %.3f rad at most)", standFrames, stat.standHip))
+    for _, role in ipairs({"Worker", "Buyer"}) do
+        local r = stat.idleRange[role]
+        check(r ~= nil and r[2] - r[1] > 0.005, string.format("a standing %s is not frozen (waist moves %.3f)", role, r and (r[2] - r[1]) or 0))
+    end
+    check(stat.waitRoll > stat.idleRoll * 1.5, string.format("a waiting customer shifts more than the idle cashier (%.3f vs %.3f)", stat.waitRoll, stat.idleRoll))
+    local byRole, weak = {}, {}
+    for _, hv in ipairs(stat.handovers) do
+        byRole[hv.role] = (byRole[hv.role] or 0) + 1
+        if hv.reach < 0.9 then table.insert(weak, string.format("%s %.2f", hv.role, hv.reach)) end
+    end
+    check((byRole.Worker or 0) >= 1 and ((byRole.Buyer or 0) + (byRole.Bargainer or 0)) >= 3,
+        string.format("handovers seen: cashier %d, customers %d", byRole.Worker or 0, (byRole.Buyer or 0) + (byRole.Bargainer or 0)))
+    check(#weak == 0, "each handover reaches forward (at least 0.9 rad)" .. (#weak > 0 and (": " .. table.concat(weak, ", ")) or ""))
+    check(stat.badReturn == 0, "the arm returns after the handover (" .. stat.badReturn .. " not)")
+    check((w.world.serverTransforms or 0) == 0 and w.world.motorTransforms > 1000,
+        string.format("poses are written on the client only (client %d, server %d)", w.world.motorTransforms, w.world.serverTransforms or 0))
+    note(string.format("frames %d · pose writes %d · walking frames %d · standing frames %d · leg swing %.2f rad · sales %d (seller %d) · handovers %d",
+        w.world.frames, w.world.motorTransforms, walkFrames, standFrames, stat.hipMax, attr(p, "K0Sales"), soldBySeller, #stat.handovers))
+    w.world.stopFrames = true
+    noScriptErrors(w)
 end)
 
 ------------------------------------------------------------------ report

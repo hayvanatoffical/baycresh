@@ -1,6 +1,6 @@
 # K0 test kaydı — doldurulacak şablon
 
-**Kaynak hedefi:** `K0-market-0.4.6`  
+**Kaynak hedefi:** `K0-market-0.4.7`  
 **Durum:** Şablon; yapılmış test veya oyuncu sonucu içermez. Her test sürümü için ayrı kopya oluşturulur. Kapı kararı `EKIP/07-YOL-HARITASI.md` §2'ye dayanır.
 
 > K0.3 kontrollü oynanış RNG seed'i kullanır ve her test sahibi atandığında aynı ekonomi dizisini baştan başlatır. Dekoratif kalabalık RNG'si ayrıdır. Katılımcıya 20 dakikalık geri sayım gösterilmez; süre dolduğunda oyun durmaz. Böylece “süre bitince kendiliğinden devam” davranışı daha az yönlendirilir.
@@ -8,7 +8,7 @@
 | Alan | Kayıt |
 |---|---|
 | Build / place adı ve ID | TBD |
-| Kaynak sürümü / commit | `K0-market-0.4.6` / TBD |
+| Kaynak sürümü / commit | `K0-market-0.4.7` / TBD |
 | Test tarihi ve saat dilimi | TBD |
 | Test edilen değişiklikler | TBD |
 | Cihaz / giriş yöntemi | TBD |
@@ -87,6 +87,9 @@ Sayaçlar **başarı skoru değildir**; gözlemci notunun yerine geçmez. Özell
 - **K0.4.5 · okunabilirlik (30–40 cm):** Kasa / Pazar kaydı / Talep / stok / Satış-Ciro / Sonuç / Kasiyer / Hedef / yardım metni için "rahat / zorlanarak / okunmuyor": **ölçülmedi** — joystick altında kalan satırlar:
 - **K0.4.5 · Roblox Text Size "Large":** taşan veya kesilen metin: **ölçülmedi** — ekran görüntüsü:
 - **K0.4.6 · HUD boyu:** HUD pazarı gereğinden çok örtüyor mu; 111×53 px teklif düğmelerinde yanlış basma: **ölçülmedi** — ekran görüntüsü:
+- **K0.4.7 · NPC animasyonu:** figürler adım atarak yürüyor, kol/bacak ayrılmıyor, figür yere batmıyor; satışta el uzatma görülüyor; müşteri yürürken FPS: **ölçülmedi** — ekran kaydı:
+- **K0.4.7 · müzik aday onayı:** sahip `MUS-MARKET-DAY` ve `MUS-SALE-CUE` bağlantılarını dinledi mi; vokal, ~90 s'de kısılıp baştan başlama, satışta üç sesin çamurlaşması: **yapılmadı** — `PRODUCTION/ASSET_PROVENANCE.md` durum sütunu:
+- **K0.4.7 · öncelik 2 ikonları ve fiyat etiketi:** seviye, kasiyer, onay/ok/çarpı ikonları anlaşılıyor mu; talep etiketinin ikinci satırı tezgâh önünden okunuyor mu: **ölçülmedi** — ekran görüntüsü:
 - Veri kaydı/geri dönüş: **K1 kapsamı; K0'da beklenmez**.
 
 ## Kapı kararı

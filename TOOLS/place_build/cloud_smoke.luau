@@ -135,6 +135,8 @@ check(ServerScriptService:FindFirstChild("K0Game") == nil, "legacy K0Game absent
 local sps = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
 local hud = sps and sps:FindFirstChild("K0MarketHUD")
 check(hud ~= nil and hud:IsA("LocalScript"), "StarterPlayerScripts/K0MarketHUD is a LocalScript")
+local motion = sps and sps:FindFirstChild("K0NpcMotion")
+check(motion ~= nil and motion:IsA("LocalScript"), "StarterPlayerScripts/K0NpcMotion is a LocalScript")
 
 local runtimePrint, runtimeWarn = capture("K0Market")
 local okRuntime, runtimeErr = pcall(BUNDLE.K0Market, runtimeScript, runtimePrint, runtimeWarn)
@@ -180,6 +182,21 @@ local demandText = board and detailText(board)
 local bonus = math.floor(C.DemandBonusRatio * 100 + 0.5)
 check(demandText ~= nil and string.find(demandText, "+" .. bonus .. "%", 1, true) ~= nil,
     "demand board shows +" .. bonus .. "%", tostring(demandText))
+
+-- K0.4.7: the demanded product's world price tag carries the demand line.
+local displays = scene:FindFirstChild("ProductDisplays")
+local marked, tagTexts = 0, {}
+for _, name in ipairs({"OrangePrice", "BreadPrice"}) do
+    local part = displays and displays:FindFirstChild(name)
+    local text
+    for _, gui in ipairs(part and part:GetChildren() or {}) do
+        local price = gui:IsA("SurfaceGui") and gui:FindFirstChild("Price")
+        if price and price:IsA("TextLabel") then text = price.Text end
+    end
+    table.insert(tagTexts, name .. "=" .. string.gsub(tostring(text), "\n", " / "))
+    if text and string.find(text, "\nTALEP +" .. bonus .. "%", 1, true) then marked += 1 end
+end
+check(marked == 1, "exactly one price tag carries the demand line", table.concat(tagTexts, " | "))
 
 local signText = scene:FindFirstChild("Stall_01") and scene.Stall_01:FindFirstChild("NameSign")
 signText = signText and signText:FindFirstChild("SignSurface")

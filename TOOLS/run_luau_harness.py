@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Layer 3 of K0 validation: run the REAL Luau sources on a mock engine.
 
-Bundles the scene builders, the three active runtime sources and the legacy
+Bundles the scene builders, the four active runtime sources and the legacy
 runtime into one Luau program together with TOOLS/luau_harness/*.luau and runs
 it with the Luau CLI on a virtual clock. See TOOLS/luau_harness/README.md.
 
@@ -35,6 +35,7 @@ SOURCES = {
     "K0MarketConfig": "GAME/src/ReplicatedStorage/K0MarketConfig.lua",
     "K0Market": "GAME/src/ServerScriptService/K0Market.server.lua",
     "K0MarketHUD": "GAME/src/StarterPlayerScripts/K0MarketHUD.client.lua",
+    "K0NpcMotion": "GAME/src/StarterPlayerScripts/K0NpcMotion.client.lua",
     "K0Game": "GAME/legacy/K0Game.server.lua",
     "K0HUD": "GAME/legacy/K0HUD.client.lua",
     "K0Config": "GAME/legacy/K0Config.lua",

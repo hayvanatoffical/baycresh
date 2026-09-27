@@ -10,7 +10,10 @@ is drawn with a known role and every HUD icon has a drawing, and (K0.4.4) that
 no instruction assumes a keyboard, the HUD lays out in its ScreenGui area and
 walking NPCs are turned to face their way, (K0.4.5) that the phone layout
 keeps a text floor and reports its real area on the console for the device test,
-and (K0.4.6) that each phone HUD part is capped at that 12 px text size.
+(K0.4.6) that each phone HUD part is capped at that 12 px text size, and
+(K0.4.7) that every figure hangs on five joints which only the client poses,
+the music slots are wired with provenance, every priority-2 icon is drawn and
+placed, and the demanded product's price tag says so.
 
 Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
 which runs the economy/scenario model instead of inspecting the text. Layer 3
@@ -29,7 +32,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "K0-market-0.4.6"
+EXPECTED_VERSION = "K0-market-0.4.7"
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -65,6 +68,7 @@ required = [
     "GAME/src/ReplicatedStorage/K0MarketConfig.lua",
     "GAME/src/ServerScriptService/K0Market.server.lua",
     "GAME/src/StarterPlayerScripts/K0MarketHUD.client.lua",
+    "GAME/src/StarterPlayerScripts/K0NpcMotion.client.lua",
     "GAME/legacy/K0Config.lua",
     "GAME/legacy/K0Game.server.lua",
     "GAME/legacy/K0HUD.client.lua",
@@ -116,9 +120,10 @@ expected_active = {
     (ROOT / "GAME/src/ReplicatedStorage/K0MarketConfig.lua").resolve(),
     (ROOT / "GAME/src/ServerScriptService/K0Market.server.lua").resolve(),
     (ROOT / "GAME/src/StarterPlayerScripts/K0MarketHUD.client.lua").resolve(),
+    (ROOT / "GAME/src/StarterPlayerScripts/K0NpcMotion.client.lua").resolve(),
 }
 if {p.resolve() for p in active_lua} != expected_active:
-    fail("GAME/src must contain exactly the three active runtime Lua files; found: "
+    fail("GAME/src must contain exactly the four active runtime Lua files; found: "
          + ", ".join(str(p.relative_to(ROOT)) for p in active_lua))
 
 for rel in ["README.md", "GAME/README.md", "GAME/src/ReplicatedStorage/K0MarketConfig.lua"]:
@@ -128,7 +133,8 @@ for rel in ["README.md", "GAME/README.md", "GAME/src/ReplicatedStorage/K0MarketC
 server = read("GAME/src/ServerScriptService/K0Market.server.lua")
 hud = read("GAME/src/StarterPlayerScripts/K0MarketHUD.client.lua")
 config = read("GAME/src/ReplicatedStorage/K0MarketConfig.lua")
-active_text = "\n".join([server, hud, config])
+motion = read("GAME/src/StarterPlayerScripts/K0NpcMotion.client.lua")
+active_text = "\n".join([server, hud, config, motion])
 
 # ------------------------------------------------- retired mechanics/files
 if "CounterAcceptChance" in active_text:
@@ -288,6 +294,30 @@ else:
         fail(f"HUD cues differ from config slots: never played {sorted(SFX_SLOTS - played)}, "
              f"no slot for {sorted(played - SFX_SLOTS)}")
 
+# K0.4.7: the two priority-1 music pieces of ASSET-PROMPTS/05-MUSIC.md, held to
+# the same candidate-id and provenance rules; the market piece loops.
+MUSIC_SLOTS = {"MarketDay", "SaleCue"}
+music_block = re.search(r"\n    Music = \{\n(.*?)\n    \},", config, re.S)
+if not music_block:
+    fail("K0.4.7 Music table missing from config")
+else:
+    tracks = re.findall(r'^\s{8}(\w+)\s*=\s*\{Id\s*=\s*"([^"]*)",\s*Volume\s*=\s*([\d.]+)(,\s*Looped\s*=\s*true)?\}',
+                        music_block.group(1), re.M)
+    if {name for name, *_ in tracks} != MUSIC_SLOTS:
+        fail(f"Music slots differ from 05-MUSIC priority 1: {sorted(name for name, *_ in tracks)}")
+    provenance = read("PRODUCTION/ASSET_PROVENANCE.md")
+    for name, sid, vol, looped in tracks:
+        if sid and not re.fullmatch(r"rbxassetid://\d+", sid):
+            fail(f"Music.{name}: Id must be rbxassetid://<number> or empty, got {sid!r}")
+        if not 0 < float(vol) <= 2:
+            fail(f"Music.{name}: Volume {vol} outside (0, 2]")
+        if sid and f"store/asset/{sid.split('//', 1)[1]}" not in provenance:
+            fail(f"Music.{name}: asset {sid} has no store-linked row in PRODUCTION/ASSET_PROVENANCE.md")
+        if bool(looped) != (name == "MarketDay"):
+            fail(f"Music.{name}: only the market piece loops (05-MUSIC)")
+    if set(re.findall(r'\bplay\("(\w+)", "Music"\)', hud)) != MUSIC_SLOTS:
+        fail("HUD must play both music slots (MarketDay, SaleCue) through play(name, \"Music\")")
+
 # --------------------------------------------- K0.4.3 readability greybox
 # ASSET-PROMPTS/01: a bargainer must read apart from a buyer before the card
 # opens, so every figure is drawn for a role. A call without a role silently
@@ -310,11 +340,27 @@ else:
             fail(f"makeNpc call without a known role: makeNpc({call})")
 # ASSET-PROMPTS/07 priority-1 icons and the budget gauge, drawn from UI frames
 # until the image set exists.
-HUD_ICONS = {"Cash", "Orange", "Bread", "DemandUp", "Permit", "Budget"}
+# K0.4.7 adds the priority-2 set: level, worker and the three offer buttons.
+HUD_ICONS = {"Cash", "Orange", "Bread", "DemandUp", "Permit", "Budget",
+             "Level", "Worker", "Accept", "Counter", "Decline"}
 drawn = set(re.findall(r"^\s{4}(\w+)\s*=\s*function\(box\)", hud, re.M))
 used_icons = set(re.findall(r'\bicon\(\w+,\s*"(\w+)"', hud))
+offer_buttons = dict(re.findall(r'\bbutton\("(\w+)",\s*\d+,\s*"[^"]*",\s*"(\w+)"\)', hud))
+used_icons |= set(offer_buttons.values())
 if drawn != HUD_ICONS or used_icons != HUD_ICONS:
     fail(f"HUD icons: drawn {sorted(drawn)}, placed {sorted(used_icons)}, expected {sorted(HUD_ICONS)}")
+if offer_buttons != {"Accept": "Accept", "Counter": "Counter", "Decline": "Decline"}:
+    fail(f"offer buttons must each carry their own icon: {offer_buttons}")
+# The button text lives in a Caption label beside the icon; writing the
+# button's own Text would draw it over the icon.
+if re.search(r"\b(accept|counter|decline)\.Text\s*=", hud):
+    fail("offer button text must be written to its Caption label, not the button")
+if "acceptMark.Visible = available >= units" not in hud:
+    fail("the accept check mark must be hidden when the stock cannot cover the offer")
+# PROP-PRICE-TAG: the demand bonus shows on the world price tag as its own line.
+tag = re.search(r"local function setPriceTag\(.*?\nend\n", server, re.S)
+if not tag or '"\\nTALEP +"' not in tag.group(0) or "TextColor3" not in tag.group(0):
+    fail("setPriceTag must add a TALEP line and colour for the product in demand")
 
 # ------------------------------------------------ K0.4.4 phone first
 # EKIP/06 §1 "Telefon önce": a phone has no E key and no number row. The server
@@ -363,6 +409,30 @@ for cap, base in [("STATUS_CAP", "SMALLEST_STATUS"), ("SIDE_CAP", "SMALLEST_SIDE
         fail(f"HUD must define {cap} = TEXT_MIN / {base} (KARARLAR UK-19)")
     if not re.search(rf"^\s+(?:local )?(?:s|r|o) = math\.min\({cap},", phone_code, re.M):
         fail(f"phone HUD scale must be capped by {cap} so the HUD is no larger than 12 px text needs (KARARLAR UK-19)")
+
+# ------------------------------------------------ K0.4.7 greybox animation
+# ASSET-PROMPTS/04: until rigged characters exist, each figure hangs its limbs on
+# five Motor6D joints and every client poses them through Motor6D.Transform,
+# which Roblox does not replicate. The server builds the joints and signals a
+# handover; it never poses a joint, and the client never moves a joint offset.
+RIG_JOINTS = {"Waist", "ShoulderL", "ShoulderR", "HipL", "HipR"}
+built = set(re.findall(r'\bjoint\(model,\s*"(\w+)"', server))
+posed = set(re.findall(r"\bpose\(j\.(\w+),", motion))
+if built != RIG_JOINTS or posed != RIG_JOINTS:
+    fail(f"NPC rig joints: server builds {sorted(built)}, client poses {sorted(posed)}, "
+         f"expected {sorted(RIG_JOINTS)} (ASSET-PROMPTS/04)")
+if re.search(r"\.Transform\s*=", server):
+    fail("server must not pose a joint (Motor6D.Transform is client-local presentation)")
+if re.search(r"\.C[01]\s*=", motion) or re.search(r"\bAnchored\s*=", motion):
+    fail("the NPC motion script may only write Motor6D.Transform, not joint offsets or parts")
+if "RunService.PreSimulation:Connect" not in motion:
+    fail("NPC poses must be set in RunService.PreSimulation (applied before physics)")
+sale = re.search(r"local function completeSale\(.*?\nend\n", server, re.S)
+if (not sale or not re.search(r"^\s+handover\(visitor\)\s*$", sale.group(0), re.M)
+        or not re.search(r"^\s+if byWorker then handover\(worker\) end\s*$", sale.group(0), re.M)):
+    fail("a completed sale must signal the handover on the customer and the cashier (ANIM-HAND/RECEIVE-ITEM)")
+if 'GetAttributeChangedSignal("K0Handover")' not in motion or 'SetAttribute("K0Handover"' not in server:
+    fail("K0Handover must be written by the server and watched by the NPC motion script")
 
 # ------------------------------------------------- telemetry completeness
 for token in ["K0FirstStockSeconds", "K0FirstOfferSeconds", "K0FirstDecisionSeconds",

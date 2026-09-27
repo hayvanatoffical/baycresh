@@ -1045,21 +1045,45 @@ function Engine.new(options)
     -- welded to it, keeping the offsets captured when the weld was completed.
     -- Physics, mass and network ownership are not modelled.
     world.welds = {}
+    world.motors = {}
     world.assemblyMoves = 0
+    -- Joints are indexed by the parts they join, so moving a part visits only
+    -- its own joints (K0.4.7: per-frame limb poses made a whole-world scan per
+    -- moved part too slow).
+    local partJoints = setmetatable({}, {__mode = "k"})
+    local function indexJoint(joint, oldPart, newPart)
+        if oldPart and partJoints[oldPart] then partJoints[oldPart][joint] = nil end
+        if newPart then
+            partJoints[newPart] = partJoints[newPart] or {}
+            partJoints[newPart][joint] = true
+        end
+    end
+    local function motorLink(md)
+        local p = md.props
+        return (p.C0 or cf(0, 0, 0)) * (p.Transform or cf(0, 0, 0)) * (p.C1 or cf(0, 0, 0)):Inverse()
+    end
     local function weldPeers(inst)
         local out = {}
-        for weld in pairs(world.welds) do
-            local wd = internals[weld]
-            if wd.destroyed then
-                world.welds[weld] = nil
+        local joints = partJoints[inst]
+        if not joints then return out end
+        for joint in pairs(joints) do
+            local jd = internals[joint]
+            if jd.destroyed then
+                joints[joint] = nil
+                world.welds[joint] = nil
+                world.motors[joint] = nil
             -- Enabled defaults to true; its default is filled in only when read,
             -- so an untouched weld has no stored value (K0.4.4 fix: before it,
             -- no weld ever moved its peer and NPC parts stayed where they spawned).
-            elseif wd.parent and wd.props.Enabled ~= false and wd.offset then
-                if wd.props.Part0 == inst and wd.props.Part1 then
-                    table.insert(out, {part = wd.props.Part1, offset = wd.offset})
-                elseif wd.props.Part1 == inst and wd.props.Part0 then
-                    table.insert(out, {part = wd.props.Part0, offset = wd.offset:Inverse()})
+            elseif jd.parent and jd.props.Enabled ~= false then
+                -- K0.4.7 Motor6D rigs: Part1 = Part0 * C0 * Transform * C1:Inverse(),
+                -- the rig rule the Roblox animation system uses. Joint physics is
+                -- not modelled.
+                local link = world.motors[joint] and motorLink(jd) or jd.offset
+                if link and jd.props.Part0 == inst and jd.props.Part1 then
+                    table.insert(out, {part = jd.props.Part1, offset = link})
+                elseif link and jd.props.Part1 == inst and jd.props.Part0 then
+                    table.insert(out, {part = jd.props.Part0, offset = link:Inverse()})
                 end
             end
         end
@@ -1071,7 +1095,8 @@ function Engine.new(options)
         d.props.CFrame = v
         fireChanged(inst, d, "CFrame", v, derived)
         fireChanged(inst, d, "Position", v.Position, true)
-        if next(world.welds) == nil then return end
+        local joints = partJoints[inst]
+        if not joints or next(joints) == nil then return end
         visited = visited or {[inst] = true}
         for _, peer in ipairs(weldPeers(inst)) do
             if not visited[peer.part] then
@@ -1161,10 +1186,53 @@ function Engine.new(options)
     end
     defClass("WeldConstraint", "Instance", {
         props = {
-            Part0 = {type = "Instance:BasePart?", set = function(inst, d, v) d.props.Part0 = v; captureWeld(inst, d) end},
-            Part1 = {type = "Instance:BasePart?", set = function(inst, d, v) d.props.Part1 = v; captureWeld(inst, d) end},
+            Part0 = {type = "Instance:BasePart?", set = function(inst, d, v) indexJoint(inst, d.props.Part0, v); d.props.Part0 = v; captureWeld(inst, d) end},
+            Part1 = {type = "Instance:BasePart?", set = function(inst, d, v) indexJoint(inst, d.props.Part1, v); d.props.Part1 = v; captureWeld(inst, d) end},
             Enabled = {type = "boolean", default = true},
         },
+    })
+    -- A joint change re-places Part1 (and whatever hangs off it) from Part0.
+    -- Transform is counted in world.motorTransforms rather than propWrites: in
+    -- Roblox it is hidden, not replicated and written by the client each frame.
+    world.motorTransforms = 0
+    local function applyMotor(inst, d)
+        world.motors[inst] = true
+        local p0, p1 = d.props.Part0, d.props.Part1
+        if not (p0 and p1) or d.props.Enabled == false then return end
+        local target = p0.CFrame * motorLink(d)
+        local p1d = internals[p1]
+        if p1d.props.CFrame ~= target then
+            world.assemblyMoves += 1
+            partSetCF(p1, p1d, target, true, {[p0] = true, [p1] = true})
+        end
+    end
+    local function jointSetter(key)
+        return function(inst, d, v)
+            if d.props[key] == v then return end
+            if key == "Part0" or key == "Part1" then indexJoint(inst, d.props[key], v) end
+            d.props[key] = v
+            if key == "Transform" then
+                world.motorTransforms += 1
+                local ctx = currentContext()
+                if not ctx or ctx.kind ~= "client" then world.serverTransforms = (world.serverTransforms or 0) + 1 end
+            else
+                world.propWrites += 1
+            end
+            applyMotor(inst, d)
+        end
+    end
+    defClass("JointInstance", "Instance", {
+        creatable = false,
+        props = {
+            Part0 = {type = "Instance:BasePart?", set = jointSetter("Part0")},
+            Part1 = {type = "Instance:BasePart?", set = jointSetter("Part1")},
+            C0 = {type = "CFrame", default = function() return cf(0, 0, 0) end, set = jointSetter("C0")},
+            C1 = {type = "CFrame", default = function() return cf(0, 0, 0) end, set = jointSetter("C1")},
+            Enabled = {type = "boolean", default = true},
+        },
+    })
+    defClass("Motor6D", "JointInstance", {
+        props = {Transform = {type = "CFrame", default = function() return cf(0, 0, 0) end, set = jointSetter("Transform")}},
     })
     defClass("Humanoid", "Instance", {props = {WalkSpeed = {type = "number", default = 16}, Health = {type = "number", default = 100}, DisplayName = {type = "string", default = ""}}})
 
@@ -1325,7 +1393,8 @@ function Engine.new(options)
                 local ctx = currentContext()
                 world.soundPlays = world.soundPlays or {}
                 table.insert(world.soundPlays, {t = world.now, name = self.Name, id = self.SoundId,
-                    volume = self.Volume, player = ctx and ctx.playerName, parent = self.Parent and self.Parent.ClassName})
+                    volume = self.Volume, looped = self.Looped, player = ctx and ctx.playerName,
+                    parent = self.Parent and self.Parent.ClassName})
             end,
             Stop = function(self) end,
         },
@@ -1465,7 +1534,8 @@ function Engine.new(options)
         IsStudio = function() return true end,
         IsServer = function() local c = currentContext() return not c or c.kind ~= "client" end,
         IsClient = function() local c = currentContext() return c ~= nil and c.kind == "client" end,
-    }, events = {Heartbeat = true, RenderStepped = true, Stepped = true}})
+    }, events = {Heartbeat = true, RenderStepped = true, Stepped = true, PreSimulation = true, PreRender = true,
+        PostSimulation = true}})
 
     local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "ServerScriptService", "ServerStorage",
         "StarterPlayer", "StarterGui", "SoundService", "TweenService", "Debris", "UserInputService",
@@ -1635,6 +1705,23 @@ function Engine.new(options)
         end
     end
     world.guiInset = 58
+
+    -- K0.4.7 frame events. Off unless a scenario starts them, so every other
+    -- scenario keeps its speed: RunService.PreSimulation then PreRender fire hz
+    -- times per virtual second, each with its frame time.
+    function world:startFrames(hz)
+        local rs = game:GetService("RunService")
+        self.frames = 0
+        self.stopFrames = false
+        resume({co = coroutine.create(function()
+            while not self.stopFrames do
+                local dt = task.wait(1 / hz)
+                self.frames += 1
+                rs.PreSimulation:_fire(dt)
+                rs.PreRender:_fire(dt)
+            end
+        end), context = {kind = "engine"}, name = "frames"})
+    end
 
     world.globals = globals
     world.Enum = Enum

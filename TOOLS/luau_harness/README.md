@@ -9,7 +9,7 @@ Gerçek K0 kaynaklarını değiştirmeden, Roblox motorunun bu kaynakların kull
 
 - Sahne kurucuları: `SCENE_BUILD`, `STALL_ART_BUILD`, `ART_V2_FIX`, `STALL_ART_V3`, `MARKET_SYSTEM_BUILD`
 - Migration: `K0_MARKET_V3_MIGRATION`
-- Aktif runtime: `K0MarketConfig`, `K0Market.server`, `K0MarketHUD.client`
+- Aktif runtime: `K0MarketConfig`, `K0Market.server`, `K0MarketHUD.client`, `K0NpcMotion.client` (K0.4.7)
 - Eski runtime (`GAME/legacy/`): yalnız devre dışı bırakıldığını kanıtlamak için
 
 Senaryolar oyuncu gibi davranır: yürür, `ProximityPrompt` tetikler, HUD düğmelerine basar, `RemoteEvent` gönderir, oyundan çıkar. Sonuçlar sunucu attribute'larından, Output satırlarından ve HUD metinlerinden okunur.
@@ -32,6 +32,8 @@ Bu araç **Roblox Studio değildir**. Buradaki bir PASS, `STUDIO PENDING` ve `DE
 - **K0.4.4'te düzeltilen motor hataları:** (1) `WeldConstraint.Enabled` varsayılanı yalnız okunduğunda yazılıyordu; hiç okunmamış weld pasif sayıldı ve NPC parçaları kökü **hiç izlemedi**. K0.4.1'in "tek parça yürür" düzeltmesi bu yüzden harness'te fiilen denetlenmemişti; H21 artık denetliyor. (2) `CFrame:Lerp` dönüş matrisini eleman eleman karıştırıyordu; yarım dönüşte eksenler kısalıyordu. Artık tek eksen etrafında sabit hızla dönüyor. H21 başında bunun öz denetimi var.
 - "Part yazımı" sayacı yalnız harness içindeki özellik yazımlarını sayar. Cihaz FPS'i, ağ bant genişliği veya bellek hakkında bir şey **söylemez**.
 - K0.4.2 ses gruplaması, bir sunucu güncellemesindeki attribute değişikliklerinin istemcide `task.defer` işi çalışmadan önce birlikte uygulandığını varsayar. Harness bunu iki sinyal modunda da sağlar; gerçek replikasyonda **doğrulanmadı**. Varsayım yanlışsa en kötü sonuç, bir bildirim sesinin başka bir sesle birlikte çalmasıdır.
+- **K0.4.7 · eklemler ve kareler (H22):** `Motor6D` taklidi Part1'i `Part0.CFrame * C0 * Transform * C1:Inverse()` ile yerleştirir; fizik ve çarpışma yoktur, figürün yere basıp basmadığı görülmez. `RunService.PreSimulation` ve `PreRender` yalnız H22'de, sanal saatte saniyede 30 kare tetiklenir; diğer senaryolar hız için kare üretmez, yani oralarda animasyon betiği yüklenir ama poz yazmaz. Bu kare hızı cihaz FPS'i değildir. `Motor6D.Transform`'un ağa yayılmadığı Roblox belgesinden alınmıştır; harness bunu sunucunun hiç `Transform` yazmamasıyla denetler, gerçek replikasyonu göstermez.
+- **K0.4.7 · düğme yazısı (H12, H15, H19):** `UIPadding` modellenmez. Bu yüzden teklif düğmelerinin yazısı padding yerine ikonun yanındaki ayrı `Caption` etiketinde durur ve sığma tahmini bu etiketin gerçek genişliğiyle yapılır. Fiyat etiketindeki `TextScaled` yazının kaç piksele düştüğü hesaplanmaz; yalnız metin ve renk denetlenir.
 - `os.clock()` sanal saate bağlıdır. Luau belgelerindeki "süre ölçümü için zaman damgası" tanımına göre duvar saati gibi davrandığı varsayılır.
 
 ## Kurulum
@@ -55,9 +57,9 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 
 | Dosya | İş |
 |---|---|
-| `engine.luau` | Sahte motor: veri tipleri, Instance ağacı, özellik doğrulaması, sinyaller (Deferred/Immediate), `task` zamanlayıcısı, TweenService, ProximityPrompt, RemoteEvent, WeldConstraint montajı, sanal saat |
+| `engine.luau` | Sahte motor: veri tipleri, Instance ağacı, özellik doğrulaması, sinyaller (Deferred/Immediate), `task` zamanlayıcısı, TweenService, ProximityPrompt, RemoteEvent, WeldConstraint ve (K0.4.7) Motor6D montajı, `RunService` kareleri, sanal saat |
 | `k0_world.luau` | Place kurulumu ve oyuncu eylemleri: sahneyi kur, runtime'ı yükle, oyuncu ekle/çıkar, yürü, prompt tetikle, düğmeye bas, metin sığdırma tahmini |
-| `k0_scenarios.luau` | H01–H21 senaryoları, sahne dökümü ve sonuç raporu |
+| `k0_scenarios.luau` | H01–H22 senaryoları, sahne dökümü ve sonuç raporu |
 | `../run_luau_harness.py` | Kaynakları ve harness dosyalarını tek Luau programında birleştirir ve çalıştırır |
 
 ## Senaryolar
@@ -67,7 +69,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 | H01 | Sahne sözleşmesi: kurucular ve runtime hatasız başlar | iki mod |
 | H02 | Kurucular ve migration iki kez çalışınca kopya üretmez | Deferred |
 | H03 | Eski runtime devre dışı bırakılır veya yüksek sesle raporlanır | Deferred |
-| H04 | Test planı 1. aşama akışı: prompt ve HUD üzerinden | iki mod |
+| H04 | Test planı 1. aşama akışı: prompt ve HUD üzerinden. **K0.4.7:** talep gören ürünün fiyat etiketi zamlı fiyatı, `TALEP +15%` satırını ve yeşili gösterir; diğeri tek satır krem | iki mod |
 | H05 | B1: yarı boş raf kısmen doldurulabilir | iki mod |
 | H06 | B2: kayıt bitimi → tasfiye → yenileme | iki mod |
 | H07 | Tek kurtarmadan sonra oyuncu yeniden ticaret yapabilir; ikinci çıkmaz raporlanır | iki mod |
@@ -80,11 +82,12 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 | H14 | Harcama oyuncuyu stoksuz ve parasız bırakamaz (yükseltme, kasiyer, maaş, yenileme) | iki mod |
 | H15 | Görülen her bildirim, yardım ve hedef metni kutusuna sığar (tahmin) | Deferred |
 | H16 | Ölçüm: talep panosunu izlemenin gerçek runtime'daki değeri (12 tohum) | Deferred |
-| H17 | Bulut smoke görev betiği (`TOOLS/place_build/cloud_smoke.luau`) bu place'te geçer; Roblox'a gönderilmeden önce betiğin kendisi denetlenir | iki mod |
-| H18 | K0.4.2 sesleri: katılımda ses yok; her olay tek ses (bildirim sesi başka sesle birlikte susar, kayıt bitimi red sesini bastırır); 25 dakikalık oturumda ses sayısı olay sayısına eşit; izleyici ses duymaz; devirde eski durum çalınmaz; boş `Id` ses nesnesi bile oluşturmaz | iki mod |
+| H17 | Bulut smoke görev betiği (`TOOLS/place_build/cloud_smoke.luau`) bu place'te geçer; Roblox'a gönderilmeden önce betiğin kendisi denetlenir. **K0.4.7:** betik `K0NpcMotion`'ı ve tam bir fiyat etiketinde talep satırını da arar | iki mod |
+| H18 | K0.4.2 sesleri: katılımda ses yok; her olay tek ses (bildirim sesi başka sesle birlikte susar, kayıt bitimi red sesini bastırır); 25 dakikalık oturumda ses sayısı olay sayısına eşit; izleyici ses duymaz; devirde eski durum çalınmaz; boş `Id` ses nesnesi bile oluşturmaz. **K0.4.7 müzik:** `MarketDay` döngüsü oturum sahibinde katılımda bir kez başlar ve döngüdür, izleyicide çalmaz, devirde yeni sahipte bir kez başlar; `SaleCue` her satışta satış sesiyle aynı anda bir kez çalar; boş `Id` sessiz kalır | iki mod |
 | H20 | K0.4.4 dokunmatik: yalnız dokunmatik cihazda hiçbir bildirim, yardım, hedef metni veya düğme tuş adı söylemez; klavyede yardım `E`'yi söyler, düğmeler `1/2/3` kısayolunu taşır | Deferred |
 | H21 | K0.4.4 NPC yönü: yürüyen her figür bir arada kalır ve yürüdüğü yöne bakar; tezgâhtaki müşteri satış noktasına, kasiyer müşteri noktasına döner; `CFrame:Lerp` öz denetimi | iki mod |
-| H19 | K0.4.3 okunabilirlik: her figür doğduğu rolle çizilir ve her teklif kendi türündeki figürden gelir; roller izdüşümde birbirinden ayrılır; HUD ikonları satıcıda görünür, izleyicide gizli; teklif kartında ürün ikonu ve bütçe göstergesi duruma uyar, doluluk SIKI < ORTA < ESNEK; kasiyer önlüklü | iki mod |
+| H19 | K0.4.3 okunabilirlik: her figür doğduğu rolle çizilir ve her teklif kendi türündeki figürden gelir; roller izdüşümde birbirinden ayrılır; HUD ikonları satıcıda görünür, izleyicide gizli; teklif kartında ürün ikonu ve bütçe göstergesi duruma uyar, doluluk SIKI < ORTA < ESNEK; kasiyer önlüklü. **K0.4.7:** seviye ve kasiyer ikonları da satırlarında; üç teklif düğmesi kendi ikonunu ve `Caption` yazısını taşır, düğmenin kendi metni boş; stok yetmeyen teklifte onay işareti yok (yalnız ekmek stoklu ayrı oturumda denetlenir); talep her iki üründe de değişirken fiyat etiketleri talebi izler | iki mod |
+| H22 | K0.4.7 gri kutu animasyon: her figürde bel, iki omuz, iki kalça eklemi; ayakkabı bacakta kalır; yürürken bacaklar birbirine ve kollar kendi taraflarındaki bacağa zıt salınır; duran figür donuk değil, bekleyen müşteri boştaki kasiyerden fazla ağırlık değiştirir; satışta alıcı ve kasiyer eli en az 0,9 rad öne uzanır ve geri döner; sunucu hiç `Transform` yazmaz | iki mod |
 
 H16 bir ölçümdür. Sonucu not olarak yazar, geçme koşulu değildir. Tasarım yorumu [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md) §4'tedir.
 

@@ -53,6 +53,7 @@ function K0World:installRuntime()
     self.serverScript = newScript(world, "Script", "K0Market", SOURCES.K0Market, game:GetService("ServerScriptService"))
     local sps = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
     self.hudScript = newScript(world, "LocalScript", "K0MarketHUD", SOURCES.K0MarketHUD, sps)
+    self.motionScript = newScript(world, "LocalScript", "K0NpcMotion", SOURCES.K0NpcMotion, sps)
 end
 
 -- Places the historical legacy runtime into the place, enabled, as a copied

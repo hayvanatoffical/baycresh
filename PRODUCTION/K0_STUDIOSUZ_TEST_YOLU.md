@@ -1,7 +1,7 @@
 # K0 — Studio'suz test yolu (Redmi telefon)
 
 **Durum:** Araştırma tamam · place kurulumu ve bulut smoke betiği bu depoda doğrulandı · **Roblox'a hiçbir şey gönderilmedi** (API anahtarı yok) · 26 Eylül 2026
-**Kaynak sürümü:** `K0-market-0.4.6`
+**Kaynak sürümü:** `K0-market-0.4.7`
 **Teknik ayrıntı:** [`TOOLS/place_build/README.md`](../TOOLS/place_build/README.md)
 
 ## Kısa cevap
@@ -76,8 +76,9 @@ Erişim ayarı: place **Private** kalabilir; sahibi oynayabilir. B12 ve Aşama 4
 
 | Plan adımı | Nasıl | Profil | Not |
 |---|---|---|---|
-| Aşama 0: hazır satırı, eski runtime yok, uyarı yok, migration ikinci kez tek metin | **Bulut smoke** (otomatik) | `default` | Redmi'de `/console` → Log → Server'da `Baycrest K0 market server ready K0-market-0.4.6` de görülür |
+| Aşama 0: hazır satırı, eski runtime yok, uyarı yok, migration ikinci kez tek metin | **Bulut smoke** (otomatik) | `default` | Redmi'de `/console` → Log → Server'da `Baycrest K0 market server ready K0-market-0.4.7` de görülür |
 | Aşama 0: NPC tek parça yürür (weld) | **Redmi'de oyna** | `default` | Fizik ister; bulut smoke göremez |
+| Aşama 0 K0.4.7: eklemli figür adım atar, kol/bacak ayrılmaz | **Redmi'de oyna** | `default` | Animasyon istemcide çalışır; bulut smoke yalnız `K0NpcMotion` betiğinin yerinde olduğunu denetler. Ekran kaydı alınır |
 | Aşama 1: 12 adımlı smoke | **Redmi'de oyna** | `default` | |
 | 2a raf kilidi | **Redmi'de oyna** | `default` | |
 | 2b kayıt çıkmazı ve kurtarma | **Redmi'de oyna** | `permit90` | `rescue_grant` ve `dead_end` satırları `/console` Server'da. Sonra `default` yeniden yüklenir. |
@@ -90,6 +91,7 @@ Erişim ayarı: place **Private** kalabilir; sahibi oynayabilir. B12 ve Aşama 4
 | Aşama 3 K0.4.2 sesleri | **Redmi'de oyna** | `default` | Telefon hoparlörü asıl hedeftir; bu satır telefonda tam yapılabilir. Sesler önce Creator Store bağlantılarından dinlenebilir: [`ASSET_PROVENANCE.md`](ASSET_PROVENANCE.md) |
 | Aşama 3 K0.4.3 siluet ve ikonlar | **Redmi'de oyna** | `default` | Telefonda tam yapılabilir. Gri tonlama testi için ekran görüntüsü alınır ve siyah-beyaz filtreyle bakılır. Telefonda bu filtre bulunamazsa görüntü saklanır ve sonra çevrilir. |
 | Aşama 3 K0.4.4 telefon düzeni, dokunmatik metinler, NPC yönü | **Redmi'de oyna** | `default` | Telefonda tam yapılabilir; bu satırların asıl hedefi Redmi'dir. Teklif kartı açıkken ve bir bildirim görünürken birer ekran görüntüsü alınır. |
+| Aşama 3 K0.4.7 müzik, öncelik 2 ikonları, fiyat etiketi | **Redmi'de oyna** | `default` | Telefonda tam yapılabilir. Müzik önce Creator Store bağlantılarından dinlenebilir: [`ASSET_PROVENANCE.md`](ASSET_PROVENANCE.md). Talep satırlı fiyat etiketini bulut smoke da denetler |
 | Aşama 3 K0.4.5–K0.4.6 okunabilirlik ve ekran ölçüsü | **Redmi'de oyna** + `/console` | `default` | Telefonda tam yapılabilir. Konsolun Log sekmesinde Client'ta `[K0 HUD] alan …` satırı okunur veya ekran görüntüsü alınır; sorular [`K0_TELEFON_EKRAN_VE_YAZI.md`](K0_TELEFON_EKRAN_VE_YAZI.md) §6. Redmi Note 13 Pro+'ta beklenen satır aynı belgenin §7.5 bölümündedir. |
 | Aşama 3 cihaz testi | **Redmi** (hedef cihaz) | `default` | FPS yalnız ölçülürse yazılır: mobil MicroProfiler ve ikinci cihaz. Ölçülmezse "ölçülmedi" yazılır, tahmin yazılmaz. |
 | Aşama 4 üç oyuncu | Üç hesap, sırayla | `default` | Sahip aynı sunucuda izleyici olarak bulunur ve `summary` satırlarını `/console`'dan kopyalar veya ekran görüntüsü alır. Konsoldan metin kopyalama telefonda denenmedi. |
