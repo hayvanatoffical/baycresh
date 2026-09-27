@@ -227,6 +227,7 @@ Telefonda ve şehirdeki bilgi panolarında. İşletme adı, ailesi, durumu (aç�
 ## 6. Tipografi ve stil
 
 - Yazı tipi: okunaklı, resmî duran bir sans-serif
+- **Telefonda yazı boyutu (UK-19):** en küçük yazı 12 px'tir (Roblox arayüz pikseli; telefonda yaklaşık Android dp). Bu, §5'teki "normal" kademedir. Arayüz devasa olmaz: telefonda paneller en küçük yazıları 12 px'e denk gelecek kadar ölçeklenir, daha büyük değil. "Büyük" ve "çok büyük" kademeler oyuncunun ayarıdır. Hesap: `PRODUCTION/K0_TELEFON_EKRAN_VE_YAZI.md`.
 - Köşeler: hafif yuvarlatılmış, 6 px
 - Arka plan: koyu yarı saydam `#12161A`, %85
 - Vurgu: lacivert `#1E3A5F` (resmî), turuncu `#D64525` (uyarı), taş grisi `#8A8578` (adalet)

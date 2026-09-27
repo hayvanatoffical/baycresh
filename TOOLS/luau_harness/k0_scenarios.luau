@@ -773,15 +773,22 @@ end)
 -- resolution by an assumed Android density: 720x1640 at 2.0 and 1080x2400 at
 -- 2.75. "floor" screens must keep every HUD text at TEXT_MIN or above; the
 -- narrow 16:9-and-smaller class is measured and reported, not held to it.
+-- K0.4.6: the owner's phone is a Redmi Note 13 Pro+ (1220x2712, 446 ppi). Its
+-- two rows are the sister Note 13 Pro's reported default of 406 dp (density 3.0)
+-- and Roblox's own ~160 dpi normalisation. On floor screens each HUD part must
+-- also land on TEXT_MIN, not above it (KARARLAR UK-19: 12 px, not bigger).
 local VIEWPORTS = {
     {name = "PC 1280x720", x = 1280, y = 720},
+    {name = "Note 13 Pro+ 904x406", x = 904, y = 406, floor = true},
+    {name = "Note 13 Pro+ 973x437", x = 973, y = 437, floor = true},
     {name = "Redmi HD+ 820x360", x = 820, y = 360, floor = true},
     {name = "Redmi FHD+ 873x393", x = 873, y = 393, floor = true},
     {name = "phone landscape 740x360", x = 740, y = 360, floor = true},
     {name = "narrow phone 568x320", x = 568, y = 320},
 }
 local TAP_MIN = 44 -- EKIP/06 §5
-local TEXT_MIN = 12 -- K0.4.5 starting estimate, KARARLAR AÇIK-15
+local TEXT_MIN = 12 -- KARARLAR UK-19: enough on a phone, and the phone HUD stays at it
+local HUD_PARTS = {"Status", "Help", "Notice", "Offer"}
 
 -- Geometry of the fixed HUD panels and the offer card at the current viewport.
 -- Returns a list of problems. Phones (shorter side of the HUD area at most 500 px,
@@ -842,7 +849,7 @@ local function layoutProblems(w, gui, vpName, stats)
     return problems
 end
 
-scenario("H12", "HUD layout: offer card, 44 px taps, 12 px text on phones, no panel overlap on five screens (estimate)", {"Deferred"}, function(mode)
+scenario("H12", "HUD layout: offer card, 44 px taps, phone text at 12 px and not larger, no panel overlap on seven screens (estimate)", {"Deferred"}, function(mode)
     local w = setup(mode)
     local p = w:addPlayer("Tester1")
     local h = handles(w)
@@ -872,6 +879,19 @@ scenario("H12", "HUD layout: offer card, 44 px taps, 12 px text on phones, no pa
             if minSize < (st.minText or math.huge) then st.minText, st.minTextWho = minSize, who end
             local area = gui.AbsoluteSize
             local phone = math.min(area.X, area.Y) <= 500
+            -- Smallest text per HUD part over every state seen: the part's scale.
+            st.part = st.part or {}
+            for _, name in ipairs(HUD_PARTS) do
+                local obj = gui[name]
+                if obj.Visible then
+                    local m = w:minTextSize(obj)
+                    if m < (st.part[name] or math.huge) then st.part[name] = m end
+                end
+            end
+            if label == "idle" then
+                local _, _, sw, sh = w:rect(gui.Status)
+                st.statusShare = sw * sh / (area.X * area.Y)
+            end
             if gui.Status.Title.Visible == phone then
                 layout[vp.name .. " · title row " .. (phone and "shown on a phone" or "hidden on a wide screen")] = true
             end
@@ -934,17 +954,29 @@ scenario("H12", "HUD layout: offer card, 44 px taps, 12 px text on phones, no pa
     table.sort(bad)
     check(#bad == 0, "panels inside the screen, no overlap, buttons at least 44 px, jump corner free, title only on wide screens, console line honest"
         .. (#bad > 0 and (":\n      - " .. table.concat(bad, "\n      - ")) or ""))
-    local small = {}
+    local small, large = {}, {}
     for _, vp in ipairs(VIEWPORTS) do
         local st = stats[vp.name]
         if vp.floor and (st.minText or 0) < TEXT_MIN - 0.01 then
             table.insert(small, string.format("%s: %.1f px (%s)", vp.name, st.minText or -1, tostring(st.minTextWho)))
         end
-        note(string.format("%s: smallest text %.1f px (%s), console %.1f px; smallest button %.0fx%.0f px (estimate, before device test)",
-            vp.name, st.minText or -1, tostring(st.minTextWho), st.reported or -1, st.tapW or -1, st.tapH or -1))
+        if vp.floor then
+            for _, name in ipairs(HUD_PARTS) do
+                local m = st.part and st.part[name]
+                if not m then
+                    table.insert(large, vp.name .. ": " .. name .. " never measured")
+                elseif m > TEXT_MIN + 0.05 then
+                    table.insert(large, string.format("%s: %s smallest text %.1f px", vp.name, name, m))
+                end
+            end
+        end
+        note(string.format("%s: smallest text %.1f px (%s), console %.1f px; smallest button %.0fx%.0f px; status panel %.0f%% of the HUD area (estimate, before device test)",
+            vp.name, st.minText or -1, tostring(st.minTextWho), st.reported or -1, st.tapW or -1, st.tapH or -1, (st.statusShare or -1) * 100))
     end
-    check(#small == 0, "no HUD text under " .. TEXT_MIN .. " px on the Redmi and 740x360 phone screens"
+    check(#small == 0, "no HUD text under " .. TEXT_MIN .. " px on the Redmi, Note 13 Pro+ and 740x360 phone screens"
         .. (#small > 0 and (":\n      - " .. table.concat(small, "\n      - ")) or ""))
+    check(#large == 0, "phone HUD not larger than needed: status, help, notice and offer card each at " .. TEXT_MIN .. " px on those screens"
+        .. (#large > 0 and (":\n      - " .. table.concat(large, "\n      - ")) or ""))
     noScriptErrors(w)
 end)
 

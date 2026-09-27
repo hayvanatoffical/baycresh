@@ -8,8 +8,9 @@ added after the headless-harness findings, (K0.4.2) that every sound cue has
 a well-formed candidate id with a provenance record, (K0.4.3) that every NPC
 is drawn with a known role and every HUD icon has a drawing, and (K0.4.4) that
 no instruction assumes a keyboard, the HUD lays out in its ScreenGui area and
-walking NPCs are turned to face their way, and (K0.4.5) that the phone layout
-keeps a text floor and reports its real area on the console for the device test.
+walking NPCs are turned to face their way, (K0.4.5) that the phone layout
+keeps a text floor and reports its real area on the console for the device test,
+and (K0.4.6) that each phone HUD part is capped at that 12 px text size.
 
 Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
 which runs the economy/scenario model instead of inspecting the text. Layer 3
@@ -28,7 +29,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "K0-market-0.4.5"
+EXPECTED_VERSION = "K0-market-0.4.6"
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -343,17 +344,25 @@ if not re.search(r"moveNpc\(visitor, entry, queue[^\n]*\n\s*(?:--[^\n]*\n\s*)*tu
 
 # ------------------------------------------------ K0.4.5 phone text floor
 # A Roblox UI pixel is about an Android dp on a phone; the smallest HUD text may
-# not scale below the floor on the Redmi screens (KARARLAR AÇIK-15). The harness
+# not scale below the floor on the Redmi screens. K0.4.6: the owner set 12 px as
+# enough and the phone HUD no larger than that (KARARLAR UK-19). The harness
 # (H12) measures it; here the constants and the device-test console line must
 # stay in the source.
 if not re.search(r"\bTEXT_MIN\s*=\s*12\b", hud):
-    fail("HUD TEXT_MIN must be 12 px (K0.4.5 starting estimate, KARARLAR AÇIK-15)")
+    fail("HUD TEXT_MIN must be 12 px (KARARLAR UK-19)")
 update = re.search(r"local function updateScale\(\).*?\nend\n", hud, re.S)
 if not update or not re.search(r"^\s+layoutStatus\(phone\)\s*$", update.group(0), re.M):
     fail("HUD must lay the status panel out for phones (layoutStatus) before scaling it")
 if (not update or not re.search(r"^\s+print\(report\)\s*$", update.group(0), re.M)
         or "[K0 HUD] alan %dx%d" not in hud or "en küçük yazı" not in hud):
     fail("HUD must print its area and smallest text size for the device test ([K0 HUD] alan ... en küçük yazı)")
+# K0.4.6: on a phone each HUD part is capped so its smallest text lands on TEXT_MIN.
+phone_code = "\n".join(re.findall(r"\n    if phone then\n(.*?)\n    else\n", update.group(0), re.S)) if update else ""
+for cap, base in [("STATUS_CAP", "SMALLEST_STATUS"), ("SIDE_CAP", "SMALLEST_SIDE"), ("OFFER_CAP", "SMALLEST_OFFER")]:
+    if not re.search(rf"^local {cap} = TEXT_MIN / {base}\s*$", hud, re.M):
+        fail(f"HUD must define {cap} = TEXT_MIN / {base} (KARARLAR UK-19)")
+    if not re.search(rf"^\s+(?:local )?(?:s|r|o) = math\.min\({cap},", phone_code, re.M):
+        fail(f"phone HUD scale must be capped by {cap} so the HUD is no larger than 12 px text needs (KARARLAR UK-19)")
 
 # ------------------------------------------------- telemetry completeness
 for token in ["K0FirstStockSeconds", "K0FirstOfferSeconds", "K0FirstDecisionSeconds",

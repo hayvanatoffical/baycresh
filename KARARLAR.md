@@ -45,6 +45,7 @@ Her kararın kaynağı ayrı işaretlenir:
 | UK-16 | Cevaplanmayan sorular Değerlendirme A'nın önerileriyle doldurulur. | Bölüm 2 |
 | UK-17 | Paket profesyonel biçimde güncellenir. | Sürüm 3.0 |
 | UK-18 | **Oyunda borsa sistemi olur.** (26 Eylül 2026) Ne işlem göreceği, kuralları ve katmanı henüz belirlenmedi: AÇIK-14. | 03 §16; tasarım bekliyor |
+| UK-19 | **Telefonda arayüz devasa olmaz, yeterince görünür olur: en küçük yazı 12 px yeterlidir.** (27 Eylül 2026) 12 px Roblox arayüz pikselidir; telefonda yaklaşık Android'in 12 sp'lik en küçük gövde yazısına denk gelir. Telefon arayüzü bu boyuttan büyük ölçeklenmez. Daha büyük yazı isteyen oyuncu yazı boyutu ayarını kullanır (06 §5; K0'da Roblox'un Text Size ayarı). Proje sahibinin test telefonu Redmi Note 13 Pro+ 5G'dir. AÇIK-15'i kapatır. | 06 §6; K0.4.6 HUD |
 
 ---
 
@@ -187,7 +188,7 @@ Bunlar onay engeli değildir. İlgili aşamada ölçülür veya kaynakla doğrul
 | AÇIK-12 | Dava bildirim penceresinin uzunluğu. | K4 | Tasarım |
 | AÇIK-13 | **K0 talep panosunun ekonomik ağırlığı.** K0.4.1 ölçümünde panoyu izleyen stok politikası izlemeyene göre 20 dakikada anlamlı fark yaratmıyor (gerçek kaynakla 12 tohumda ortalama −2,2 ₡). Seçenekler (değiştirme / talep döngüsünü uzat / talep bonusunu artır / ikisi) ölçüldü, hiçbiri uygulanmadı: `PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md` §4. Prototip config değeridir; 03 §14 baz çizgisini etkilemez. | K0 oyuncu testi öncesi | **Kullanıcı** + Tasarım |
 | AÇIK-14 | **Borsa sisteminin tasarımı (UK-18).** Karar verilen şey yalnız borsanın olacağıdır. Açık sorular: (1) Ne işlem görür: kurgusal NPC şirketleri mi, oyuncu işletmelerinin payları mı? (2) Fiyat neye bağlıdır: şehir olayları mı, oyuncuların alım-satımı mı? (3) Manipülasyon ve tekelleşme frenleri: işlem ve pozisyon sınırı, komisyonun para çıkışı olarak çalışması (03 §1, §11, §12.1). (4) Kural 1 sınırı: borsa şansa dayalı bir oyun gibi çalışmaz; Robux ile bağlantısı olmaz (03 §2, §13). (5) Kalıcı veri (K1) ve telemetri gerektirir; 03 §15 ekonomi modeline bir borsa yolu eklenmeden sayı konmaz. K0 kapsamında değildir. Roblox'un ilgili platform kuralları yayın ayında resmî kaynaktan kontrol edilir. | Katman seçimi K1 kapısından sonra | **Kullanıcı** + Tasarım |
-| AÇIK-15 | **Telefonda en küçük yazı boyutu.** EKIP/06 "küçük yazı okunmaz" der ama sayı vermez. K0.4.5 prototipi başlangıç tahmini olarak 12 px kullanıyor: telefonda Roblox pikseli yaklaşık Android dp'dir ve Android'in en küçük gövde yazısı 12 sp'dir. Redmi HD+ ekranda durum panelinin alt satırları 12,4 px, FHD+'da 14 px (harness hesabı). Seçenekler: (1) 12 px'te kal; (2) 14 px (Android olağan gövde yazısı), telefonda sadeleştirilmiş panel gerekir; (3) Roblox mühendisinin önerdiği 20 px, telefonda katlanır panel gerekir. Hesap ve kaynaklar: `PRODUCTION/K0_TELEFON_EKRAN_VE_YAZI.md`. Cihaz testindeki okunabilirlik cevapları karara kanıt olur. | K0 oyuncu testi | **Kullanıcı** + Arayüz |
+| AÇIK-15 | **Telefonda en küçük yazı boyutu — kapandı (27 Eylül 2026): UK-19.** Seçenekler 12 px, sadeleştirilmiş panelle 14 px ve katlanır panelle 20 px idi. Proje sahibi 12 px'i seçti ve arayüzün gereğinden büyük olmamasını istedi. Hesap ve kaynaklar: `PRODUCTION/K0_TELEFON_EKRAN_VE_YAZI.md`. Cihaz testindeki okunabilirlik cevapları kayda geçer; bir satır "okunmuyor" çıkarsa konu sahibe yeniden sunulur. | Kapandı | **Kullanıcı** |
 
 ---
 

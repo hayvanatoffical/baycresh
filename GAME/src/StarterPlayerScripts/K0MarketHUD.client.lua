@@ -271,7 +271,12 @@ decline.BackgroundColor3 = Color3.fromRGB(70, 76, 78)
 -- UI pixel is roughly an Android dp (Roblox normalises to about 160 dpi), so a
 -- TextSize compares directly with Android's sp. Material 3's smallest body text
 -- is 12 sp; K0.4.4 let the status rows fall to 11 px on a 360 dp-tall phone.
--- The floor is a starting estimate (KARARLAR AÇIK-15), not a device result.
+--
+-- K0.4.6 (KARARLAR UK-19): the owner set 12 px as enough and asked that the HUD
+-- not be bigger than that needs. On a phone the floor is also the target: each
+-- HUD part scales so its smallest text lands on TEXT_MIN and no larger, which
+-- leaves more of the market in view. Players who need larger text use Roblox's
+-- own Text Size setting. Screens too small even for 12 px still shrink below it.
 local TAP_MIN = 44
 local TEXT_MIN = 12
 local JUMP_CLEAR_X, JUMP_CLEAR_Y = 100, 95
@@ -279,6 +284,9 @@ local STATUS_W, STATUS_H = 410, 334
 -- The title row is branding only; phones drop it so the rows can stay larger.
 local TITLE_H = 34
 local SMALLEST_STATUS, SMALLEST_SIDE, SMALLEST_OFFER = 14, 15, 14
+local STATUS_CAP = TEXT_MIN / SMALLEST_STATUS
+local SIDE_CAP = TEXT_MIN / SMALLEST_SIDE
+local OFFER_CAP = TEXT_MIN / SMALLEST_OFFER
 
 local statusRowY = {}
 for _, child in ipairs(status:GetChildren()) do
@@ -322,9 +330,8 @@ local function updateScale()
         -- Height decides first. Across, the panel may take more than half the
         -- screen as long as the right column keeps its text at the floor; on a
         -- screen too narrow for both it falls back to half.
-        local sideFloor = TEXT_MIN / SMALLEST_SIDE
-        local across = math.max((W - 48 - 400 * sideFloor) / STATUS_W, (W / 2 - 24) / STATUS_W)
-        s = math.min(1, (H - 36) / (STATUS_H - TITLE_H), across)
+        local across = math.max((W - 48 - 400 * SIDE_CAP) / STATUS_W, (W / 2 - 24) / STATUS_W)
+        s = math.min(STATUS_CAP, (H - 36) / (STATUS_H - TITLE_H), across)
     else
         s = math.min(math.clamp(W / 760, 0.72, 1), math.clamp(H / 650, 0.76, 1))
     end
@@ -335,7 +342,7 @@ local function updateScale()
     if phone then
         -- Right column: notice on top, help under it, both above the jump button.
         local x0 = statusRight + 12
-        local r = math.min(1, (W - 18 - x0) / 400, (H - 18 - JUMP_CLEAR_Y) / 216)
+        local r = math.min(SIDE_CAP, (W - 18 - x0) / 400, (H - 18 - JUMP_CLEAR_Y) / 216)
         toast.Size = UDim2.fromOffset(400, 104)
         toastText.Size = UDim2.new(1, -28, 0, 94)
         toastScale.Scale = r
@@ -353,7 +360,7 @@ local function updateScale()
         indent(offerSignal, 48, 105)
         indent(offerStock, 48, 131)
         layoutButtons(162, 130, 62, {14, 155, 296})
-        local o = math.min(1, (W - 24) / 440, (H - 16) / 236)
+        local o = math.min(OFFER_CAP, (W - 24) / 440, (H - 16) / 236)
         offerScale.Scale = o
         place(offer, math.min(W / 2, W - JUMP_CLEAR_X - 220 * o), H / 2, 0.5, 0.5)
         smallest = math.min(SMALLEST_STATUS * s, SMALLEST_SIDE * r, SMALLEST_OFFER * o)
