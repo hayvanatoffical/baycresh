@@ -22,6 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "TOOLS" / "roblox_cloud.py"
+sys.path.insert(0, str(CLI.parent))
+from roblox_cloud import short_version  # noqa: E402  (the rule the CLI uses to pick a build)
 KEY = "TEST-KEY-must-never-be-printed-8c1f"
 UNIVERSE, PLACE, MAIN = "111", "222", "83986068176961"
 
@@ -102,9 +104,13 @@ def run(args, env_extra, place_dir):
 
 def main() -> int:
     src = ROOT / "dist" / "place"
-    builds = sorted(src.glob("BAYCREST-*-default.rbxl"))
-    if not builds:
-        print("SKIP — no default build. Run: python3 TOOLS/build_place.py default")
+    # dist/place keeps the builds of earlier versions too. Copy only the build of
+    # the current source version: the CLI publishes that one, so the byte-for-byte
+    # and tamper checks must look at the same file (K0.4.3 fix; picking any
+    # "*-default.rbxl" compared against an older build once two versions existed).
+    stem = f"BAYCREST-{short_version()}-default"
+    if not (src / f"{stem}.rbxl").exists():
+        print(f"SKIP — no default build for {short_version()}. Run: python3 TOOLS/build_place.py default")
         return 2
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -120,9 +126,9 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         place_dir = Path(tmp)
-        for f in src.glob("BAYCREST-*-default.*"):
+        for f in src.glob(f"{stem}.*"):
             shutil.copy(f, place_dir / f.name)
-        place = next(place_dir.glob("BAYCREST-*-default.rbxl"))
+        place = place_dir / f"{stem}.rbxl"
 
         code, out = run(["status"], {}, place_dir); outputs.append(out)
         check(code == 2 and "MISSING" in out, "status without settings reports MISSING and exits 2", out)

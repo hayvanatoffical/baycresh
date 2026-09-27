@@ -1,5 +1,19 @@
 # BAYCREST — Değişiklik Günlüğü
 
+## 27 Eylül 2026 — K0.4.3: okunabilirlik gri kutusu
+
+[`PRODUCTION/K0.4_ASSET_REQUIREMENTS.md`](PRODUCTION/K0.4_ASSET_REQUIREMENTS.md) öncelik 1'de iki okunabilirlik açığı vardı. Pazarlıkçı ile normal alıcı aynı kutu-insandı, bu yüzden oyuncu kimin geldiğini ancak teklif kartını açınca öğreniyordu. HUD da tamamen metindi. İkisi varlık beklemeden gri kutu olarak kodla kapatıldı. Ekonomi değerleri ve kuralları değişmedi. Kaynak sürümü `K0-market-0.4.3`.
+
+- **Rol siluetleri.** NPC'ler artık rolüne göre çiziliyor ve roller `ASSET-PROMPTS/01`'deki biçimleri izliyor. Alıcıda bez çanta var. Pazarlıkçıda kasket, geniş açık ceket ve kalkık el var. Yalnız bakan müşteri çantasız, elleri arkada. Kasiyerin önlüğü tezgâh renginde. Yoldan geçenler aksesuarsız ve soluk renkli. Rolü biçim taşır, renk yalnız ikinci işarettir. Figürler hâlâ `Part` ilkelleri; gerçek model üretilmedi.
+- **HUD ikonları.** Kasa, pazar kaydı, talep, portakal ve ekmek satırlarının yanına 24 px ikon geldi (`ASSET-PROMPTS/07` öncelik 1). Teklif kartında ürün ikonu, pazarlıkçı için de tek bir bütçe doluluk göstergesi var: SIKI 1/3, ORTA 2/3, ESNEK dolu. İkonlar görsel set gelene kadar UI kutularından çizildi. Portakal ile ekmek şekilden ayrılıyor. Yanlarındaki metin korunuyor; hiçbir bilgi yalnız ikonda veya yalnız renkte değil (ORTAK-028). Stok satırı iki parçaya bölündü.
+- **Harness H19.** Her figür doğduğu rolle çiziliyor ve her teklif kendi türündeki figürden geliyor. Roller, parçaların önden ve yandan izdüşümünde birbirinden ayrılıyor: alıcı/pazarlıkçı farkı %17 (eşik %12), diğer çiftler %8–11 (eşik %5). Bu bir vekil ölçüdür, ekranda görülen şekil değildir. İkonlar satıcıda görünüyor, izleyicide gizli. Kart ikonları ürünü ve teklif türünü izliyor, bütçe dolulukları 6 / 12 / 18 px. Kasiyer önlüklü. Sonuç: iki sinyal modunda **32/32 PASS**. Dört bilinçli bozma denemesinin dördünü de H19 düşürdü: pazarlıkçıyı düz çizmek, her ziyaretçiyi alıcı çizmek, bütçe dolumunu sabitlemek ve ürün ikonunu ters göstermek.
+- **Doğrulayıcı.** `validate_package.py` artık rolsüz `makeNpc` çağrısını, eksik rol görünümünü ve çizimi olmayan HUD ikonunu reddediyor. Üç bozma denemesiyle sınandı.
+- **Test aracı düzeltmesi.** `test_roblox_cloud.py`, `dist/place` klasöründe biriken eski sürüm dosyalarından rastgele birini seçiyordu. Yükleme aracı ise güncel sürümü gönderiyor. Üç sürüm biriktiğinde "gönderilen dosya doğrulanan dosyanın aynısı" ve "değişen dosya reddedilir" kontrolleri yanlış dosyaya baktı ve düştü. K0.4.2'de geçmesi dizin sırasının şansıydı. Test artık aracın kendi kuralıyla yalnız güncel sürümün dosyasını kullanıyor; sonuç 22/22. Yükleme aracının kendisinde hata yoktu.
+- **Ekonomi değişmedi.** Aynı tohumla müşteri dizisi (H10) ve 20 dakikalık oturum özeti (H11) önceki sürümle birebir aynı. H11 sayaçlarındaki fark yalnız çizimden geliyor. Her figüre bir kez `NpcRole` attribute'u yazıldığı için sunucu attribute yazımı 4 804'ten 5 010'a çıktı. Yayalar artık aksesuarsız olduğu için parça yazımı 81 308'den 79 302'ye indi. Cihaz etkisi ölçülmedi.
+- **Durum:** `HARNESS VERIFIED` · **`STUDIO PENDING`** · **`DEVICE PENDING`**. Pazarlıkçının telefonda kart açılmadan tanındığı ve ikonların 24 px'te okunduğu **ölçülmedi**. Test planına Aşama 3'te üç satır eklendi: [`PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](PRODUCTION/K0.4_NEXT_TEST_PLAN.md).
+
+---
+
 ## 26 Eylül 2026 — K0.4.2: hazır sesler
 
 K0'da ses yoktu. `ASSET-PROMPTS/06-SFX.md` listesindeki 12 ses yuvasına Roblox Creator Store'dan hazır ses adayları bağlandı. Ekonomi değerleri ve oyun kuralları değişmedi. Kaynak sürümü `K0-market-0.4.2`.

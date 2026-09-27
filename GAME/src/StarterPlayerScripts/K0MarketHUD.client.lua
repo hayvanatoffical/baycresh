@@ -59,6 +59,97 @@ local function label(parent, name, text, y, height, size, color)
     return t
 end
 
+-- K0.4.3 greybox icons (ASSET-PROMPTS/07-UI-ICONOGRAPHY.md). Until the image set
+-- exists, each icon is a few filled UI frames on a 24 px grid with one base colour
+-- and at most one accent. The SHAPE carries the meaning (round orange, long bread,
+-- an arrow for demand, a fill level for the budget), so nothing depends on colour
+-- alone. Icons sit beside the text and the text stays: they speed up scanning,
+-- they do not replace it.
+local ROUND = UDim.new(0.5, 0)
+local gold = Color3.fromRGB(230, 184, 92)
+local orangeFruit = Color3.fromRGB(238, 143, 47)
+local breadCrust = Color3.fromRGB(205, 151, 87)
+
+local function shape(parent, name, w, h, x, y, color, corner, rotation)
+    local s = Instance.new("Frame")
+    s.Name = name
+    s.AnchorPoint = Vector2.new(0.5, 0.5)
+    s.Size = UDim2.fromOffset(w, h)
+    s.Position = UDim2.fromOffset(x, y)
+    s.BackgroundColor3 = color
+    s.BorderSizePixel = 0
+    s.Rotation = rotation or 0
+    s.Parent = parent
+    if corner then
+        local c = Instance.new("UICorner")
+        c.CornerRadius = corner
+        c.Parent = s
+    end
+    return s
+end
+
+local drawIcon = {
+    Cash = function(box)
+        for i, y in ipairs({18, 13, 8}) do
+            local coin = shape(box, "Coin" .. i, 18, 7, 12, y, gold, ROUND)
+            local rim = Instance.new("UIStroke")
+            rim.Color = dark
+            rim.Thickness = 2
+            rim.Parent = coin
+        end
+    end,
+    Orange = function(box)
+        shape(box, "Fruit", 18, 18, 12, 13, orangeFruit, ROUND)
+        shape(box, "Leaf", 7, 4, 15, 4, good, ROUND, -30)
+    end,
+    Bread = function(box)
+        shape(box, "Loaf", 22, 12, 12, 13, breadCrust, UDim.new(0, 6))
+        shape(box, "Slash1", 3, 8, 9, 13, dark, nil, 30)
+        shape(box, "Slash2", 3, 8, 15, 13, dark, nil, 30)
+    end,
+    DemandUp = function(box)
+        shape(box, "Shaft", 4, 12, 12, 13, good)
+        shape(box, "HeadLeft", 4, 11, 9, 8, good, nil, 45)
+        shape(box, "HeadRight", 4, 11, 15, 8, good, nil, -45)
+        shape(box, "Base", 16, 3, 12, 21, good)
+    end,
+    Permit = function(box)
+        shape(box, "Sheet", 16, 20, 12, 12, cream, UDim.new(0, 2))
+        shape(box, "Fold", 8, 8, 20, 2, dark, nil, 45)
+        shape(box, "Line", 8, 2, 10, 8, dark)
+        shape(box, "Seal", 7, 7, 12, 16, accent, ROUND)
+    end,
+    -- One capsule, three fill levels (ASSET-PROMPTS/07 "Bütçe sinyali tasarım
+    -- kararı"): the player reads how much room there is, not a symbol.
+    Budget = function(box)
+        local capsule = shape(box, "Capsule", 12, 24, 12, 12, dark, ROUND)
+        capsule.BackgroundTransparency = 1
+        local outline = Instance.new("UIStroke")
+        outline.Color = cream
+        outline.Thickness = 2
+        outline.Parent = capsule
+        local level = shape(box, "Level", 6, 18, 12, 21, good, UDim.new(0, 3))
+        level.AnchorPoint = Vector2.new(0.5, 1)
+    end,
+}
+
+local function icon(parent, kind, x, y)
+    local box = Instance.new("Frame")
+    box.Name = "Icon" .. kind
+    box.Size = UDim2.fromOffset(24, 24)
+    box.Position = UDim2.fromOffset(x, y)
+    box.BackgroundTransparency = 1
+    box.Parent = parent
+    drawIcon[kind](box)
+    return box
+end
+
+-- Moves a label right of its icon; the box keeps its 14 px right margin.
+local function indent(t, x, y)
+    t.Position = UDim2.new(0, x, 0, y or t.Position.Y.Offset)
+    t.Size = UDim2.new(1, -(x + 14), 0, t.Size.Y.Offset)
+end
+
 local status = frame("Status", UDim2.fromOffset(410, 334), UDim2.fromOffset(18, 18))
 local statusScale = Instance.new("UIScale")
 statusScale.Parent = status
@@ -68,13 +159,28 @@ local cashLabel = label(status, "Cash", "Kasa", 42, 29, 23, cream)
 local ownershipLabel = label(status, "Ownership", "Tezgâh", 75, 24, 16, cream)
 local permitLabel = label(status, "Permit", "Pazar kaydı", 101, 24, 16, cream)
 local demandLabel = label(status, "Demand", "Talep", 127, 24, 16, good)
-local stockLabel = label(status, "Stock", "Stok", 153, 24, 15, cream)
+local stockLabel = label(status, "Stock", "Portakal", 153, 24, 15, cream)
+local breadLabel = label(status, "BreadStock", "Ekmek", 153, 24, 15, cream)
 -- K0.4 put five figures on one 30 px line; with real numbers it wrapped to two
 -- lines and the second was clipped. Flow and result now have a line each.
 local resultLabel = label(status, "Result", "Satış", 179, 22, 14, cream)
 local profitLabel = label(status, "Profit", "Sonuç", 201, 22, 14, cream)
 local workerLabel = label(status, "Worker", "Kasiyer", 225, 24, 14, cream)
 local goalLabel = label(status, "Goal", "Hedef", 251, 52, 14, accent)
+
+local statusIcons = {
+    icon(status, "Cash", 14, 44),
+    icon(status, "Permit", 14, 101),
+    icon(status, "DemandUp", 14, 127),
+    icon(status, "Orange", 14, 153),
+    icon(status, "Bread", 204, 153),
+}
+indent(cashLabel, 46)
+indent(permitLabel, 46)
+indent(demandLabel, 46)
+indent(stockLabel, 46)
+stockLabel.Size = UDim2.fromOffset(150, 24)
+indent(breadLabel, 236)
 
 local track = Instance.new("Frame")
 track.Name = "UpgradeTrack"
@@ -111,6 +217,22 @@ offerTitle.Font = Enum.Font.GothamBold
 local offerDetail = label(offer, "OfferDetail", "", 45, 58, 17, cream)
 local offerSignal = label(offer, "OfferSignal", "", 105, 24, 14, good)
 local offerStock = label(offer, "OfferStock", "", 131, 24, 14, muted)
+local offerOrange = icon(offer, "Orange", 14, 49)
+local offerBread = icon(offer, "Bread", 14, 49)
+local offerBudget = icon(offer, "Budget", 14, 105)
+local budgetLevel = offerBudget.Level
+indent(offerDetail, 48)
+indent(offerSignal, 48)
+indent(offerStock, 48)
+
+-- Fill rank follows each profile's MaxRatio, so the tightest budget is the
+-- lowest level whatever order the config lists them in.
+local budgetFill = {}
+do
+    local ranked = table.clone(C.BargainProfiles)
+    table.sort(ranked, function(a, b) return a.MaxRatio < b.MaxRatio end)
+    for i, profile in ipairs(ranked) do budgetFill[profile.Hint] = i / #ranked end
+end
 
 local function button(name, x, text)
     local b = Instance.new("TextButton")
@@ -151,9 +273,9 @@ local function updateScale()
         -- On phones, keep touch targets tall instead of shrinking three buttons
         -- into a single tiny row. The whole card is scaled to fit the viewport.
         offer.Size = UDim2.fromOffset(430, 374)
-        offerDetail.Position = UDim2.new(0, 14, 0, 45)
-        offerSignal.Position = UDim2.new(0, 14, 0, 105)
-        offerStock.Position = UDim2.new(0, 14, 0, 133)
+        indent(offerDetail, 48, 45)
+        indent(offerSignal, 48, 105)
+        indent(offerStock, 48, 133)
         accept.Position = UDim2.new(0, 14, 0, 174)
         counter.Position = UDim2.new(0, 14, 0, 234)
         decline.Position = UDim2.new(0, 14, 0, 294)
@@ -163,6 +285,9 @@ local function updateScale()
         offerScale.Scale = math.min(math.clamp(size.X / 455, 0.72, 1), math.clamp(size.Y / 640, 0.72, 1))
     else
         offer.Size = UDim2.fromOffset(490, 244)
+        indent(offerDetail, 48, 45)
+        indent(offerSignal, 48, 105)
+        indent(offerStock, 48, 131)
         accept.Position = UDim2.new(0, 14, 0, 174)
         counter.Position = UDim2.new(0, 172, 0, 174)
         decline.Position = UDim2.new(0, 330, 0, 174)
@@ -300,6 +425,8 @@ local function render()
         permitLabel.Text = ""
         demandLabel.Text = ""
         stockLabel.Text = ""
+        breadLabel.Text = ""
+        for _, i in ipairs(statusIcons) do i.Visible = false end
         resultLabel.Text = ""
         profitLabel.Text = ""
         workerLabel.Text = ""
@@ -328,6 +455,7 @@ local function render()
     local rescues = player:GetAttribute("K0RescueGrants") or 0
     local deadEnd = (player:GetAttribute("K0DeadEndSeconds") or -1) >= 0
 
+    for _, i in ipairs(statusIcons) do i.Visible = true end
     cashLabel.Text = "Kasa  " .. cash .. " ₡"
     ownershipLabel.Text = claimed and ("Benim tezgâhım / Seviye " .. level) or "Sahiplik: henüz yok"
     if not claimed then
@@ -340,7 +468,8 @@ local function render()
         permitLabel.Text = "Pazar kaydı: " .. (player:GetAttribute("K0PermitRemaining") or 0) .. " sn"
     end
     demandLabel.Text = "Talep  " .. productName(demandSKU) .. "  +" .. demandBonus .. "%  /  " .. demandRemaining .. " sn"
-    stockLabel.Text = "Portakal " .. orange .. " kg  |  Ekmek " .. bread .. " adet"
+    stockLabel.Text = C.Products.orange.Name .. " " .. orange .. " " .. C.Products.orange.Unit
+    breadLabel.Text = C.Products.bread.Name .. " " .. bread .. " " .. C.Products.bread.Unit
     resultLabel.Text = "Satış " .. sold .. "  |  Ciro " .. revenue .. " ₡  |  Gider " .. operatingCost .. " ₡"
     profitLabel.Text = "Sonuç " .. operatingResult .. " ₡  |  Yatırım " .. investment .. " ₡"
     profitLabel.TextColor3 = operatingResult < 0 and accent or cream
@@ -402,6 +531,10 @@ local function render()
         offerDetail.Text = productName(sku) .. "  " .. units .. " " .. unit .. "\nEtiket " .. ask .. " ₡   Teklif " .. bid .. " ₡"
         offerSignal.Text = kind == "Bargainer" and ("Bütçe sinyali: " .. signal .. "  |  Karşı teklif: " .. counterPrice .. " ₡") or "Etiket fiyatı kabul ediliyor."
         offerStock.Text = "Stok: " .. available .. " " .. unit .. (available < units and "  /  YETERSİZ" or "")
+        offerOrange.Visible = sku == "orange"
+        offerBread.Visible = sku == "bread"
+        offerBudget.Visible = kind == "Bargainer" and budgetFill[signal] ~= nil
+        budgetLevel.Size = UDim2.fromOffset(6, math.floor(18 * (budgetFill[signal] or 0) + 0.5))
         accept.Text = available < units and "Stok yok" or ("1  Sat  " .. bid .. " ₡")
         accept.Active = available >= units
         accept.AutoButtonColor = available >= units

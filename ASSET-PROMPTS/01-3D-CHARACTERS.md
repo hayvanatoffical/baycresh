@@ -1,6 +1,6 @@
 # 01 — 3D karakterler (NPC)
 
-**Durum:** TASLAK · K0.4
+**Durum:** TASLAK · K0.4 · **K0.4.3:** beş rolün gri kutu yer tutucusu kodda (`K0Market.server.lua` `makeNpc`), gerçek model üretilmedi
 **Bu oturumda görsel üretilmedi.** Aşağıdakiler sonraki görsel/model AI oturumuna verilecek promptlardır.
 
 ## K0'ın gerçekten ihtiyacı olan karakterler

@@ -422,31 +422,66 @@ local skins = {
     Color3.fromRGB(229, 188, 150), Color3.fromRGB(184, 125, 89),
     Color3.fromRGB(115, 77, 57), Color3.fromRGB(205, 155, 112),
 }
-local shirts = {
-    Color3.fromRGB(111, 132, 89), Color3.fromRGB(191, 119, 83),
-    Color3.fromRGB(85, 119, 153), Color3.fromRGB(222, 203, 171),
-}
 
-local function makeNpc(name, position, style)
-    style = style or cosmeticRng:NextInteger(1, 4)
+-- K0.4.3 greybox role silhouettes (ASSET-PROMPTS/01, PRODUCTION/K0.4_ASSET_REQUIREMENTS.md
+-- §2). A buyer and a bargainer must read apart before the offer card opens, and
+-- only the shape carries the role: colour is a second cue, never the only one.
+-- Buyer: tote bag. Bargainer: flat cap, wider open jacket, one hand raised.
+-- Browser: no bag, hands behind the back, lowest contrast. Worker: apron in the
+-- claimed stall's canopy colour. Passer-by and pedestrian: plain, desaturated.
+-- Skin and hair still vary per figure; the cosmetic stream is drawn as before.
+local looks = {
+    Buyer = {shirts = {Color3.fromRGB(111, 132, 89), Color3.fromRGB(191, 119, 83), Color3.fromRGB(196, 170, 128)},
+        legs = Color3.fromRGB(86, 84, 70)},
+    Bargainer = {shirts = {Color3.fromRGB(64, 84, 108)}, legs = Color3.fromRGB(56, 58, 66)},
+    Browser = {shirts = {Color3.fromRGB(214, 204, 182), Color3.fromRGB(166, 178, 160)}, legs = Color3.fromRGB(150, 150, 140)},
+    Worker = {shirts = {Color3.fromRGB(222, 203, 171)}, legs = Color3.fromRGB(70, 72, 76)},
+    Passerby = {shirts = {Color3.fromRGB(132, 132, 128), Color3.fromRGB(112, 116, 118)}, legs = Color3.fromRGB(92, 94, 96)},
+}
+looks.Pedestrian = looks.Passerby
+local warmBrown = Color3.fromRGB(104, 74, 52)
+local canopyTerracotta = Color3.fromRGB(163, 74, 50)
+
+local function makeNpc(name, position, role)
+    local look = looks[role] or looks.Passerby
+    local style = role == "Worker" and 2 or cosmeticRng:NextInteger(1, 4)
     local model = Instance.new("Model")
     model.Name = name
+    model:SetAttribute("NpcRole", looks[role] and role or "Passerby")
     local skin = skins[style]
+    local shirt = look.shirts[(style - 1) % #look.shirts + 1]
+    local bargainer = role == "Bargainer"
     local root = npcPart(model, "Root", Vector3.new(0.3, 0.3, 0.3), Vector3.zero, Color3.new(1, 1, 1), position)
     root.Transparency = 1
     model.PrimaryPart = root
-    npcPart(model, "Torso", Vector3.new(1.55, 1.7, 0.75), Vector3.new(0, 0.12, 0), shirts[style], position)
+    local shoulder = bargainer and 1.08 or 0.98
+    npcPart(model, "Torso", bargainer and Vector3.new(1.78, 1.72, 0.86) or Vector3.new(1.55, 1.7, 0.75), Vector3.new(0, 0.12, 0), shirt, position)
     npcPart(model, "Head", Vector3.new(1.15, 1.15, 1.15), Vector3.new(0, 1.56, 0), skin, position, Enum.PartType.Ball)
-    npcPart(model, "Hair", Vector3.new(1.18, 0.48, 1.17), Vector3.new(0, 2.05, 0), Color3.fromRGB(47 + style * 9, 41 + style * 6, 38 + style * 4), position, Enum.PartType.Ball)
+    if bargainer then
+        npcPart(model, "ShirtFront", Vector3.new(0.44, 1.56, 0.06), Vector3.new(0, 0.14, -0.45), Color3.fromRGB(150, 112, 80), position)
+        npcPart(model, "Cap", Vector3.new(1.24, 0.24, 1.24), Vector3.new(0, 2.1, 0.02), warmBrown, position)
+        npcPart(model, "CapBrim", Vector3.new(1.0, 0.08, 0.56), Vector3.new(0, 2.0, -0.74), warmBrown, position)
+    else
+        npcPart(model, "Hair", Vector3.new(1.18, 0.48, 1.17), Vector3.new(0, 2.05, 0), Color3.fromRGB(47 + style * 9, 41 + style * 6, 38 + style * 4), position, Enum.PartType.Ball)
+    end
     for _, side in ipairs({-1, 1}) do
-        npcPart(model, "Arm", Vector3.new(0.42, 1.55, 0.48), Vector3.new(side * 0.98, 0.04, 0), skin, position)
-        npcPart(model, "Leg", Vector3.new(0.58, 1.6, 0.62), Vector3.new(side * 0.40, -1.62, 0), Color3.fromRGB(62, 66 + style * 10, 69 + style * 8), position)
+        local arm = Vector3.new(side * shoulder, 0.04, 0)
+        if bargainer and side == 1 then
+            arm = Vector3.new(shoulder, 0.58, -0.2)
+        elseif role == "Browser" then
+            arm = Vector3.new(side * 0.9, 0.04, 0.24)
+        end
+        npcPart(model, "Arm", Vector3.new(0.42, 1.55, 0.48), arm, skin, position)
+        npcPart(model, "Leg", Vector3.new(0.58, 1.6, 0.62), Vector3.new(side * 0.40, -1.62, 0), look.legs, position)
         npcPart(model, "Shoe", Vector3.new(0.62, 0.22, 0.82), Vector3.new(side * 0.40, -2.47, -0.12), Color3.fromRGB(48, 43, 43), position)
         npcPart(model, "Eye", Vector3.new(0.095, 0.11, 0.05), Vector3.new(side * 0.25, 1.67, -0.54), Color3.fromRGB(40, 39, 36), position, Enum.PartType.Ball)
     end
-    if style == 1 or style == 3 then
-        npcPart(model, "Tote", Vector3.new(0.78, 0.82, 0.15), Vector3.new(-1.15, -0.72, -0.2), Color3.fromRGB(206, 192, 155), position)
-        npcPart(model, "ToteHandle", Vector3.new(0.13, 0.55, 0.16), Vector3.new(-1.15, -0.16, -0.2), Color3.fromRGB(181, 166, 135), position)
+    if role == "Buyer" then
+        npcPart(model, "Tote", Vector3.new(0.95, 1.0, 0.3), Vector3.new(-1.28, -0.8, -0.05), Color3.fromRGB(206, 192, 155), position)
+        npcPart(model, "ToteHandle", Vector3.new(0.13, 0.62, 0.16), Vector3.new(-1.28, -0.02, -0.05), Color3.fromRGB(181, 166, 135), position)
+    elseif role == "Worker" then
+        npcPart(model, "Apron", Vector3.new(1.3, 1.85, 0.08), Vector3.new(0, -0.35, -0.42), canopyTerracotta, position)
+        npcPart(model, "ApronStrap", Vector3.new(0.95, 0.14, 0.08), Vector3.new(0, 0.8, -0.42), canopyTerracotta, position)
     end
     -- One anchored root carries the whole figure (see moveNpc).
     for _, part in ipairs(model:GetChildren()) do
@@ -913,7 +948,7 @@ hirePrompt.Triggered:Connect(function(player)
     state.hired = true
     state.wagesDue = false
     state.shiftRemaining = C.ShiftSeconds
-    worker = makeNpc("Worker_K0", points.WorkerStand.Position, 2)
+    worker = makeNpc("Worker_K0", points.WorkerStand.Position, "Worker")
     milestone("hire")
     sync()
     notice("Kasiyer alındı. Normal alıcıları stok varsa servis eder; vardiya ücreti " .. C.WagePerShift .. " ₡.")
@@ -1096,7 +1131,7 @@ task.spawn(function()
                 local east = cosmeticRng:NextInteger(1, 2) == 1
                 local start = Vector3.new(east and -39 or 39, 2.8, lane)
                 local finish = Vector3.new(east and 39 or -39, 2.8, lane)
-                local pedestrian = makeNpc("Pedestrian_" .. crowdSerial, start)
+                local pedestrian = makeNpc("Pedestrian_" .. crowdSerial, start, "Pedestrian")
                 moveNpc(pedestrian, start, finish, cosmeticRng:NextInteger(10, 15))
                 if pedestrian and pedestrian.Parent then pedestrian:Destroy() end
                 crowdCount = math.max(0, crowdCount - 1)
@@ -1162,11 +1197,11 @@ task.spawn(function()
             if kind == "Passerby" then
                 state.passers += 1
                 if owner then owner:SetAttribute("K0Passers", state.passers) end
-                local passer = makeNpc("PassingVisitor_" .. state.passers, entry)
+                local passer = makeNpc("PassingVisitor_" .. state.passers, entry, "Passerby")
                 moveNpc(passer, entry, exitPoint, economyRng:NextInteger(8, 12))
                 if passer and passer.Parent then passer:Destroy() end
             else
-                visitor = makeNpc("Visitor_" .. (offerSerial + 1), entry)
+                visitor = makeNpc("Visitor_" .. (offerSerial + 1), entry, kind)
                 state.visitorState = "walking"
                 sync()
                 moveNpc(visitor, entry, queue, economyRng:NextInteger(C.ShopperWalkMin, C.ShopperWalkMax))

@@ -25,6 +25,7 @@ Bu araç **Roblox Studio değildir**. Buradaki bir PASS, `STUDIO PENDING` ve `DE
 - Motor API'si yalnız kaynakların kullandığı yüzey kadar taklit edilir. Bilinmeyen üye veya yanlış tip Roblox'taki gibi hata verir. Bu yüzden bir yazım hatası sessizce geçmez. Yine de taklit edilen davranış belgelere göre yazılmıştır; motorun kendisi değildir.
 - `PlayerRemoving` ile `Parent` değişiminin sırası gibi motor ayrıntıları gerçek Roblox'ta **doğrulanmadı**.
 - HUD metin sığdırma kontrolü (H12, H15) bir **tahmindir**: karakter genişliği ortalama bir glif ölçüsüyle hesaplanır. Gerçek font ölçümü değildir.
+- H19'un siluet farkı figür parçalarının önden ve yandan izdüşümüdür (0,1 stud ızgara). Render, ışık ve ekran boyutu yoktur; "telefonda ayırt ediliyor" anlamına gelmez. Eşikler (alıcı/pazarlıkçı %12, diğer çiftler %5) figürlerin yeniden aynılaşmasını yakalayan gerilemeye karşı korumadır.
 - "Part yazımı" sayacı yalnız harness içindeki özellik yazımlarını sayar. Cihaz FPS'i, ağ bant genişliği veya bellek hakkında bir şey **söylemez**.
 - K0.4.2 ses gruplaması, bir sunucu güncellemesindeki attribute değişikliklerinin istemcide `task.defer` işi çalışmadan önce birlikte uygulandığını varsayar. Harness bunu iki sinyal modunda da sağlar; gerçek replikasyonda **doğrulanmadı**. Varsayım yanlışsa en kötü sonuç, bir bildirim sesinin başka bir sesle birlikte çalmasıdır.
 - `os.clock()` sanal saate bağlıdır. Luau belgelerindeki "süre ölçümü için zaman damgası" tanımına göre duvar saati gibi davrandığı varsayılır.
@@ -52,7 +53,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 |---|---|
 | `engine.luau` | Sahte motor: veri tipleri, Instance ağacı, özellik doğrulaması, sinyaller (Deferred/Immediate), `task` zamanlayıcısı, TweenService, ProximityPrompt, RemoteEvent, WeldConstraint montajı, sanal saat |
 | `k0_world.luau` | Place kurulumu ve oyuncu eylemleri: sahneyi kur, runtime'ı yükle, oyuncu ekle/çıkar, yürü, prompt tetikle, düğmeye bas, metin sığdırma tahmini |
-| `k0_scenarios.luau` | H01–H18 senaryoları, sahne dökümü ve sonuç raporu |
+| `k0_scenarios.luau` | H01–H19 senaryoları, sahne dökümü ve sonuç raporu |
 | `../run_luau_harness.py` | Kaynakları ve harness dosyalarını tek Luau programında birleştirir ve çalıştırır |
 
 ## Senaryolar
@@ -77,6 +78,7 @@ Bir Roblox place'i `Workspace.SignalBehavior` ayarına göre ertelenmiş (`Defer
 | H16 | Ölçüm: talep panosunu izlemenin gerçek runtime'daki değeri (12 tohum) | Deferred |
 | H17 | Bulut smoke görev betiği (`TOOLS/place_build/cloud_smoke.luau`) bu place'te geçer; Roblox'a gönderilmeden önce betiğin kendisi denetlenir | iki mod |
 | H18 | K0.4.2 sesleri: katılımda ses yok; her olay tek ses (bildirim sesi başka sesle birlikte susar, kayıt bitimi red sesini bastırır); 25 dakikalık oturumda ses sayısı olay sayısına eşit; izleyici ses duymaz; devirde eski durum çalınmaz; boş `Id` ses nesnesi bile oluşturmaz | iki mod |
+| H19 | K0.4.3 okunabilirlik: her figür doğduğu rolle çizilir ve her teklif kendi türündeki figürden gelir; roller izdüşümde birbirinden ayrılır; HUD ikonları satıcıda görünür, izleyicide gizli; teklif kartında ürün ikonu ve bütçe göstergesi duruma uyar, doluluk SIKI < ORTA < ESNEK; kasiyer önlüklü | iki mod |
 
 H16 bir ölçümdür. Sonucu not olarak yazar, geçme koşulu değildir. Tasarım yorumu [`PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md) §4'tedir.
 

@@ -4,8 +4,9 @@
 This is not a Roblox Studio/Luau runtime test. It verifies package topology,
 version consistency, retired-runtime isolation, local Markdown links, and the
 source-level invariants that K0.4 established after the K0.3 audit and K0.4.1
-added after the headless-harness findings, and (K0.4.2) that every sound cue has
-a well-formed candidate id with a provenance record.
+added after the headless-harness findings, (K0.4.2) that every sound cue has
+a well-formed candidate id with a provenance record, and (K0.4.3) that every NPC
+is drawn with a known role and every HUD icon has a drawing.
 
 Layer 1 of the validation. Layer 2 is TOOLS/simulate_k0.py (+ scenarios_k0.py),
 which runs the economy/scenario model instead of inspecting the text. Layer 3
@@ -24,7 +25,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "K0-market-0.4.2"
+EXPECTED_VERSION = "K0-market-0.4.3"
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -282,6 +283,34 @@ else:
     if played != SFX_SLOTS:
         fail(f"HUD cues differ from config slots: never played {sorted(SFX_SLOTS - played)}, "
              f"no slot for {sorted(played - SFX_SLOTS)}")
+
+# --------------------------------------------- K0.4.3 readability greybox
+# ASSET-PROMPTS/01: a bargainer must read apart from a buyer before the card
+# opens, so every figure is drawn for a role. A call without a role silently
+# falls back to the plain passer-by look.
+NPC_ROLES = {"Buyer", "Bargainer", "Browser", "Worker", "Passerby", "Pedestrian"}
+looks_block = re.search(r"\nlocal looks = \{\n(.*?)\n\}\n(.*?)\nlocal function makeNpc", server, re.S)
+if not looks_block:
+    fail("K0.4.3 NPC role looks table missing from server")
+else:
+    looks = set(re.findall(r"^\s{4}(\w+)\s*=", looks_block.group(1), re.M)) \
+        | set(re.findall(r"^looks\.(\w+)\s*=", looks_block.group(2), re.M))
+    if looks != NPC_ROLES:
+        fail(f"NPC looks differ from the K0 roles: missing {sorted(NPC_ROLES - looks)}, "
+             f"unexpected {sorted(looks - NPC_ROLES)}")
+    for call in re.findall(r"\bmakeNpc\(([^()]*(?:\([^()]*\)[^()]*)*)\)", server):
+        if call.startswith("name, position"):
+            continue
+        role = call.rsplit(",", 1)[-1].strip() if call.count(",") >= 2 else ""
+        if role != "kind" and role.strip('"') not in NPC_ROLES:
+            fail(f"makeNpc call without a known role: makeNpc({call})")
+# ASSET-PROMPTS/07 priority-1 icons and the budget gauge, drawn from UI frames
+# until the image set exists.
+HUD_ICONS = {"Cash", "Orange", "Bread", "DemandUp", "Permit", "Budget"}
+drawn = set(re.findall(r"^\s{4}(\w+)\s*=\s*function\(box\)", hud, re.M))
+used_icons = set(re.findall(r'\bicon\(\w+,\s*"(\w+)"', hud))
+if drawn != HUD_ICONS or used_icons != HUD_ICONS:
+    fail(f"HUD icons: drawn {sorted(drawn)}, placed {sorted(used_icons)}, expected {sorted(HUD_ICONS)}")
 
 # ------------------------------------------------- telemetry completeness
 for token in ["K0FirstStockSeconds", "K0FirstOfferSeconds", "K0FirstDecisionSeconds",

@@ -1,6 +1,6 @@
 # 07 — UI ve ikonografi
 
-**Durum:** TASLAK · K0.4
+**Durum:** TASLAK · K0.4 · **K0.4.3:** öncelik 1 ikonları ve bütçe göstergesi UI kutularından çizilmiş gri kutu olarak HUD'da (`K0MarketHUD.client.lua` `drawIcon`), görsel set üretilmedi
 **Bu dosya görsel üretmez.** Sonraki görsel AI oturumuna verilecek promptları tutar.
 
 ## Kaynak bağlantısı

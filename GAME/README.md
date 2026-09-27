@@ -1,8 +1,8 @@
 # Baycrest K0 — Roblox Studio prototip kaynakları
 
-**Kaynak sürümü:** `K0-market-0.4.2` · 26 Eylül 2026  
+**Kaynak sürümü:** `K0-market-0.4.3` · 27 Eylül 2026  
 **Studio hedefi:** place ID `83986068176961`, `Workspace/BlackstoneBazaar_K0`  
-**Durum:** K0.3 denetlendi; iki oyun-durduran hata giderildi (K0.4). K0.4 kaynağı başsız harness'te çalıştırıldı; harness'in düşürdüğü beş hata ve eşlik eden telemetri eksikleri giderildi (K0.4.1). Hazır ses efektleri HUD'a bağlandı (K0.4.2). Bu ZIP'in üretilmesi Studio place'inin otomatik olarak güncellendiği veya oyuncu testinin geçtiği anlamına gelmez.
+**Durum:** K0.3 denetlendi; iki oyun-durduran hata giderildi (K0.4). K0.4 kaynağı başsız harness'te çalıştırıldı; harness'in düşürdüğü beş hata ve eşlik eden telemetri eksikleri giderildi (K0.4.1). Hazır ses efektleri HUD'a bağlandı (K0.4.2). Müşteri rolleri siluetle ayrıldı ve HUD'a gri kutu ikonları eklendi (K0.4.3). Bu ZIP'in üretilmesi Studio place'inin otomatik olarak güncellendiği veya oyuncu testinin geçtiği anlamına gelmez.
 
 K0'ın tek sorusu: **“Oyuncu ilk dakikalarda bir şeye sahip olup, görünür kararlarla büyütmek istiyor mu?”** Polis, suç, silah, kalıcı veri ve büyük şehir bu prototipin kapsamı değildir.
 
@@ -38,6 +38,7 @@ Eski `K0Game`, `K0HUD` ve `K0Config` kaynakları çifte runtime ve aynı Attribu
 9. **K0.4:** kayıt borcu varken toptancı tezgâhları kapanmıyor, **geri alım** moduna geçiyor. Oyuncu stoğunu etiketin %50'sine tasfiye edip kaydı yenileyebiliyor. Parası ve stoğu bitmişse oturum başına **bir kez** kayıt **ücretsiz** yenileniyor (**K0.4.1**; K0.4'te kasayı sıfırlıyordu) ve bu olay telemetriye yazılıyor.
 10. **K0.4.1:** rafı boş oyuncunun yükseltme, kasiyer veya maaş ödemesi, ödeme sonrası kasası en ucuz birimin (6 ₡) altında kalacaksa reddedilir ve oyuncuya önce stok alması söylenir. Stoksuz tezgâha müşteri gelmediği için bu durum oturumu bitirirdi.
 11. **K0.4.2:** satış, kasa, stok, müşteri gelişi, pazarlık, red/süre dolması, seviye 2, kasiyer, kayıt bitimi, tasfiye, bildirim ve teklif düğmeleri için 12 kısa ses çalar (`K0MarketConfig.Sounds`). Yalnız satıcı duyar; ses hiçbir bilgiyi tek başına taşımaz, HUD'da zaten görünen olayı tekrarlar. Bir olay tek ses çalar: bildirimle gelen olayda bildirim sesi susar, kayıt bitimi bekleyen müşteriyi durdurduğunda red sesi çalmaz. Sesler Creator Store'dan ölçülerek seçilmiş **adaylardır** ve dinlenmedi; seçim ve ölçüm: [`../PRODUCTION/ASSET_PROVENANCE.md`](../PRODUCTION/ASSET_PROVENANCE.md). Bir slotun `Id`'si boş bırakılırsa o ses çalmaz.
+12. **K0.4.3:** NPC'ler rolüne göre çizilir: alıcıda bez çanta, pazarlıkçıda kasket, geniş açık ceket ve kalkık el, yalnız bakan müşteride çantasız ve eller arkada, kasiyerde tezgâh renginde önlük, yoldan geçenlerde aksesuarsız soluk renk. Oyuncu kimin geldiğini teklif kartı açılmadan görür; rolü biçim taşır, renk yalnız ikinci işarettir. HUD'da kasa, pazar kaydı, talep oku, portakal ve ekmek satırlarının yanında ikon var; teklif kartında ürün ikonu ve pazarlıkçı için bütçe doluluk göstergesi (SIKI 1/3, ORTA 2/3, ESNEK dolu) çıkar. İkonlar görsel set gelene kadar UI kutularından çizilmiş gri kutudur; yanlarındaki metin korunur.
 
 Bu akıştaki `70 / 250 / 60 / 45 ₡`, `%15` ve sıkıştırılmış süreler **K0 playtest değeridir**. `K0MarketConfig.Production` altında tutulan kanonik ekonomi değerlerinin yerine geçmez.
 
@@ -95,7 +96,7 @@ Ayrıntı: [`../PRODUCTION/K0.4.1_IMPLEMENTATION_REPORT.md`](../PRODUCTION/K0.4.
 3. Yukarıdaki üç aktif kaynağı yerleştirin.
 4. Mevcut sahnede `K0_MARKET_V3_MIGRATION.lua`; temiz sahnede `MARKET_SYSTEM_BUILD.lua` çalıştırın.
 5. Play ile en az şu smoke akışını geçin: sahiplen → kayıt → iki stoktan biri → müşteri teklifi → pazarlık → seviye 2 → kasiyer → maaş. Kayıt yenilemeyi ayrıca doğrulamak isterseniz Edit-mode smoke kopyasında süreyi geçici düşürün; kaydedilen K0.3 değeri 22 dakikadır.
-6. Konsolda tek `Baycrest K0 market server ready K0-market-0.4.2` satırı bulunmalı; eski `Baycrest K0 server ready` runtime'ı çalışmamalı.
+6. Konsolda tek `Baycrest K0 market server ready K0-market-0.4.3` satırı bulunmalı; eski `Baycrest K0 server ready` runtime'ı çalışmamalı.
 6b. **K0.4 kontrolü:** toptancı promptu `ActionText` alanına çalışma zamanında yazıyor ("Stok al" / "Tasfiye et"). Sahne kurucular K0.3 döneminde yazıldığı için ilk kontrol edilecek nokta burasıdır.
 6c. **K0.4.1 kontrolü:** NPC parçaları köke `WeldConstraint` ile bağlı. İlk müşteri ve yaya **tek parça** yürümeli; dağılan veya düşen parça varsa test durur. Adımlar: [`../PRODUCTION/K0.4_NEXT_TEST_PLAN.md`](../PRODUCTION/K0.4_NEXT_TEST_PLAN.md) Aşama 0 ve 2d.
 7. Android ve üç bağımsız 20 dakikalık ürün testi yapılmadan `DOĞRULANDI` yazmayın.
@@ -106,4 +107,4 @@ Studio yalnız Windows ve macOS'ta çalışır. Bilgisayar yoksa place bu depoda
 
 ## Bilinen sınırlar
 
-K0 hâlâ tek satıcılı, bellekte yaşayan bir prototiptir. DataStore, işlem kimliği, oturumlar arası geri dönüş, gerçek R15 NPC rig/animasyonları, çok oyunculu işletme yazarlığı ve gerçek cihaz performansı K0.4.1 kaynak paketinde çözülmüş sayılmaz (K0.4.2 kaynak paketi dahil). Güncel liste: [`../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md`](../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md). Bunlar sonraki katmanların veya Studio/cihaz QA'nın işidir.
+K0 hâlâ tek satıcılı, bellekte yaşayan bir prototiptir. DataStore, işlem kimliği, oturumlar arası geri dönüş, gerçek R15 NPC rig/animasyonları, çok oyunculu işletme yazarlığı ve gerçek cihaz performansı K0.4.1 kaynak paketinde çözülmüş sayılmaz (K0.4.3 kaynak paketi dahil). Güncel liste: [`../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md`](../PRODUCTION/K0.4_KNOWN_LIMITATIONS.md). Bunlar sonraki katmanların veya Studio/cihaz QA'nın işidir.

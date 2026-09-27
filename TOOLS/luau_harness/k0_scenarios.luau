@@ -1259,6 +1259,193 @@ scenario("H18", "Sound cues: one cue per event, seller only, silent start, empty
     noScriptErrors(w2)
 end)
 
+-- K0.4.3 readability greybox. The silhouette measure is a front + side
+-- projection of the figure's parts on a 0.1 stud grid: a harness proxy for
+-- "the roles read apart by shape", not a view on a phone screen.
+local function silhouette(model)
+    local root = model.PrimaryPart
+    local front, side = {}, {}
+    for _, part in ipairs(model:GetChildren()) do
+        if part:IsA("BasePart") and part ~= root and part.Transparency < 1 then
+            local o = part.Position - root.Position
+            local ball = part.Shape == Enum.PartType.Ball
+            local function fill(cells, cx, cy, sx, sy)
+                for gx = math.floor((cx - sx / 2) * 10), math.ceil((cx + sx / 2) * 10) do
+                    for gy = math.floor((cy - sy / 2) * 10), math.ceil((cy + sy / 2) * 10) do
+                        local dx, dy = (gx / 10 - cx) / (sx / 2), (gy / 10 - cy) / (sy / 2)
+                        if (ball and dx * dx + dy * dy <= 1) or (not ball and math.abs(dx) <= 1 and math.abs(dy) <= 1) then
+                            cells[gx .. ":" .. gy] = true
+                        end
+                    end
+                end
+            end
+            fill(front, o.X, o.Y, part.Size.X, part.Size.Y)
+            fill(side, o.Z, o.Y, part.Size.Z, part.Size.Y)
+        end
+    end
+    return {front = front, side = side}
+end
+
+-- Share of the combined outline that only one of the two figures covers.
+local function outlineDifference(a, b)
+    local only, union = 0, 0
+    for _, view in ipairs({"front", "side"}) do
+        for k in pairs(a[view]) do union += 1; if not b[view][k] then only += 1 end end
+        for k in pairs(b[view]) do if not a[view][k] then union += 1; only += 1 end end
+    end
+    return union > 0 and only / union or 0
+end
+
+local ICON_NAMES = {"IconCash", "IconPermit", "IconDemandUp", "IconOrange", "IconBread"}
+
+scenario("H19", "Readability greybox: NPC roles read apart by shape; HUD icons and budget gauge follow state", nil, function(mode)
+    local w = setup(mode)
+    local p = w:addPlayer("Seller1")
+    local s = w:addPlayer("Watcher2")
+    local h = handles(w)
+    local scene = w:scene()
+
+    -- Every figure is recorded as it enters the scene.
+    local expectedRole = {Pedestrian_ = "Pedestrian", PassingVisitor_ = "Passerby"}
+    local shapes, counts, wrongRole = {}, {}, {}
+    scene.ChildAdded:Connect(function(child)
+        local role = child:GetAttribute("NpcRole")
+        if role == nil then return end
+        counts[role] = (counts[role] or 0) + 1
+        for prefix, want in pairs(expectedRole) do
+            if string.match(child.Name, "^" .. prefix) and role ~= want then
+                table.insert(wrongRole, child.Name .. "=" .. role)
+            end
+        end
+        if string.match(child.Name, "^Visitor_") and role ~= "Buyer" and role ~= "Bargainer" and role ~= "Browser" then
+            table.insert(wrongRole, child.Name .. "=" .. role)
+        end
+        shapes[role] = shapes[role] or silhouette(child)
+    end)
+    local function currentVisitor()
+        for _, c in ipairs(scene:GetChildren()) do
+            if string.match(c.Name, "^Visitor_") then return c end
+        end
+        return nil
+    end
+    local browsersChecked, browserMismatch = 0, 0
+    p:GetAttributeChangedSignal("K0Browsers"):Connect(function()
+        local v = currentVisitor()
+        browsersChecked += 1
+        if not v or v:GetAttribute("NpcRole") ~= "Browser" then browserMismatch += 1 end
+    end)
+
+    -- The bot answers every offer; the decision hook inspects the open card first.
+    local gui = w:hud(p)
+    local offers, roleMismatch, iconMismatch, stockTextMismatch = 0, {}, {}, 0
+    local function inspect(pp)
+        offers += 1
+        local kind, sku = attr(pp, "K0OfferType"), attr(pp, "K0OfferSKU")
+        local v = currentVisitor()
+        local role = v and v:GetAttribute("NpcRole")
+        if role ~= kind then table.insert(roleMismatch, string.format("offer %d: %s drawn as %s", attr(pp, "K0OfferId"), kind, tostring(role))) end
+        local card = gui.Offer
+        if card.IconOrange.Visible ~= (sku == "orange") or card.IconBread.Visible ~= (sku == "bread") then
+            table.insert(iconMismatch, "product icon for " .. sku)
+        end
+        if card.IconBudget.Visible ~= (kind == "Bargainer") then table.insert(iconMismatch, "budget gauge for " .. kind) end
+        if not string.find(gui.Status.Stock.Text, " " .. attr(pp, "K0OrangeStock") .. " ", 1, true)
+            or not string.find(gui.Status.BreadStock.Text, " " .. attr(pp, "K0BreadStock") .. " ", 1, true) then
+            stockTextMismatch += 1
+        end
+        return defaultDecision(pp)
+    end
+    local bag = playFor(w, p, h, 900, {decide = inspect, hire = false})
+    reportBag(bag)
+
+    check(#wrongRole == 0, "every figure carries the role of its spawn: " .. table.concat(wrongRole, ", "))
+    check(offers >= 10 and #roleMismatch == 0, string.format("each of %d offers came from a figure drawn as its kind%s", offers,
+        #roleMismatch > 0 and (": " .. table.concat(roleMismatch, "; ")) or ""))
+    check(browsersChecked >= 1 and browserMismatch == 0, string.format("each of %d browsers is drawn as a browser", browsersChecked))
+    check(#iconMismatch == 0, "offer card icons follow the product and the offer kind: " .. table.concat(iconMismatch, ", "))
+    check(stockTextMismatch == 0, "stock labels show the current orange and bread stock")
+    for _, role in ipairs({"Buyer", "Bargainer", "Browser", "Passerby", "Pedestrian"}) do
+        check(shapes[role] ~= nil, role .. " figure seen (" .. (counts[role] or 0) .. ")")
+    end
+
+    -- Outline differences between roles the player treats differently. Identical
+    -- geometry scores 0 (skin colour does not count). The floors are regression
+    -- guards, not a readability measurement: buyer and bargainer are the pair the
+    -- offer decision depends on (ASSET-PROMPTS/01), so theirs is the higher one.
+    local pairsToCheck = {
+        {"Buyer", "Bargainer", 0.12}, {"Buyer", "Browser", 0.05}, {"Bargainer", "Browser", 0.05},
+        {"Buyer", "Passerby", 0.05}, {"Bargainer", "Passerby", 0.05},
+    }
+    local notes = {}
+    for _, pair in ipairs(pairsToCheck) do
+        local a, b = shapes[pair[1]], shapes[pair[2]]
+        if a and b then
+            local d = outlineDifference(a, b)
+            table.insert(notes, string.format("%s/%s %.0f%%", pair[1], pair[2], d * 100))
+            check(d >= pair[3], string.format("%s and %s outlines differ by at least %.0f%% (%.1f%%)", pair[1], pair[2], pair[3] * 100, d * 100))
+        end
+    end
+    note("outline difference (front + side projection): " .. table.concat(notes, ", "))
+
+    -- Status icons: the owner sees them, a spectator does not.
+    for _, name in ipairs(ICON_NAMES) do
+        local i = gui.Status:FindFirstChild(name)
+        check(i ~= nil and i.Visible and i.Size.X.Offset == 24 and i.Size.Y.Offset == 24, name .. " shown at 24 px for the seller")
+        local si = w:hud(s).Status:FindFirstChild(name)
+        check(si ~= nil and not si.Visible, name .. " hidden for the spectator")
+    end
+    -- Orange and bread must differ by shape alone (the greyscale test in 07).
+    local fruit, loaf = gui.Status.IconOrange.Fruit.Size, gui.Status.IconBread.Loaf.Size
+    check(fruit.X.Offset == fruit.Y.Offset and loaf.X.Offset >= 1.5 * loaf.Y.Offset,
+        string.format("orange icon is round (%dx%d), bread icon is long (%dx%d)", fruit.X.Offset, fruit.Y.Offset, loaf.X.Offset, loaf.Y.Offset))
+    noScriptErrors(w)
+
+    -- Worker figure: a cashier gets the apron.
+    local w3 = setup(mode, {configPatch = patchNumber("StartingCash", C.PermitFee + C.UpgradeCost + C.HireCost + 150)})
+    local p3 = w3:addPlayer("Seller1")
+    local h3 = handles(w3)
+    go(w3, p3, h3.claim)
+    go(w3, p3, h3.permit)
+    go(w3, p3, h3.orange)
+    go(w3, p3, h3.upgrade)
+    go(w3, p3, h3.hire)
+    w3.world:advance(0.5)
+    local worker = w3:scene():FindFirstChild("Worker_K0")
+    check(worker ~= nil and worker:GetAttribute("NpcRole") == "Worker" and worker:FindFirstChild("Apron") ~= nil,
+        "the hired cashier is drawn with an apron")
+    noScriptErrors(w3)
+
+    -- Budget gauge: with bargainers made frequent, all three signals show and
+    -- the fill level alone orders them.
+    local w2 = setup(mode, {configPatch = patchText("Bargainer = 18}", "Bargainer = 600}")})
+    local p2 = w2:addPlayer("Seller1")
+    local h2 = handles(w2)
+    local gui2 = w2:hud(p2)
+    local levels, unstable = {}, 0
+    local function gauge(pp)
+        if attr(pp, "K0OfferType") == "Bargainer" then
+            local signal = attr(pp, "K0OfferSignal")
+            local height = gui2.Offer.IconBudget.Level.Size.Y.Offset
+            if levels[signal] and levels[signal] ~= height then unstable += 1 end
+            levels[signal] = height
+        end
+        return defaultDecision(pp)
+    end
+    local guard = 0
+    while (levels.SIKI == nil or levels.ORTA == nil or levels.ESNEK == nil) and guard < 12 do
+        guard += 1
+        playFor(w2, p2, h2, 60, {decide = gauge, hire = false})
+    end
+    check(levels.SIKI and levels.ORTA and levels.ESNEK, string.format("all three budget signals seen (SIKI %s, ORTA %s, ESNEK %s)",
+        tostring(levels.SIKI), tostring(levels.ORTA), tostring(levels.ESNEK)))
+    if levels.SIKI and levels.ORTA and levels.ESNEK then
+        check(levels.SIKI + 4 <= levels.ORTA and levels.ORTA + 4 <= levels.ESNEK and levels.ESNEK <= 18,
+            string.format("fill rises SIKI < ORTA < ESNEK by at least 4 px on the 24 px icon (%d, %d, %d)", levels.SIKI, levels.ORTA, levels.ESNEK))
+    end
+    check(unstable == 0, "the same signal always shows the same fill")
+    noScriptErrors(w2)
+end)
+
 ------------------------------------------------------------------ report
 local total, failed = 0, 0
 print("")
