@@ -266,9 +266,33 @@ decline.BackgroundColor3 = Color3.fromRGB(70, 76, 78)
 -- buttons stay out of the bottom-right corner where the default jump button sits
 -- (PlayerModule TouchJump: 70 px, 25 px from the right, 20 px from the bottom).
 -- All sizes are estimates until the device test.
+--
+-- K0.4.5 text floor (PRODUCTION/K0_TELEFON_EKRAN_VE_YAZI.md). On phones a Roblox
+-- UI pixel is roughly an Android dp (Roblox normalises to about 160 dpi), so a
+-- TextSize compares directly with Android's sp. Material 3's smallest body text
+-- is 12 sp; K0.4.4 let the status rows fall to 11 px on a 360 dp-tall phone.
+-- The floor is a starting estimate (KARARLAR AÇIK-15), not a device result.
 local TAP_MIN = 44
+local TEXT_MIN = 12
 local JUMP_CLEAR_X, JUMP_CLEAR_Y = 100, 95
 local STATUS_W, STATUS_H = 410, 334
+-- The title row is branding only; phones drop it so the rows can stay larger.
+local TITLE_H = 34
+local SMALLEST_STATUS, SMALLEST_SIDE, SMALLEST_OFFER = 14, 15, 14
+
+local statusRowY = {}
+for _, child in ipairs(status:GetChildren()) do
+    if child:IsA("GuiObject") and child ~= title then statusRowY[child] = child.Position.Y.Offset end
+end
+
+local function layoutStatus(phone)
+    local lift = phone and TITLE_H or 0
+    title.Visible = not phone
+    status.Size = UDim2.fromOffset(STATUS_W, STATUS_H - lift)
+    for child, y in pairs(statusRowY) do
+        child.Position = UDim2.new(child.Position.X.Scale, child.Position.X.Offset, 0, y - lift)
+    end
+end
 
 local function place(obj, x, y, anchorX, anchorY)
     obj.AnchorPoint = Vector2.new(anchorX or 0, anchorY or 0)
@@ -282,20 +306,31 @@ local function layoutButtons(y, width, height, xs)
     end
 end
 
+-- One console line per layout, so the device test can read the real HUD area and
+-- the smallest text size (Roblox menu > Settings > Developer Console, or /console).
+local lastReport
+
 local function updateScale()
     local area = gui.AbsoluteSize
     local W, H = area.X, area.Y
     if W <= 0 or H <= 0 then return end
     local phone = math.min(W, H) <= 500
+    layoutStatus(phone)
 
     local s
     if phone then
-        s = math.min(1, (H - 36) / STATUS_H, (W / 2 - 24) / STATUS_W)
+        -- Height decides first. Across, the panel may take more than half the
+        -- screen as long as the right column keeps its text at the floor; on a
+        -- screen too narrow for both it falls back to half.
+        local sideFloor = TEXT_MIN / SMALLEST_SIDE
+        local across = math.max((W - 48 - 400 * sideFloor) / STATUS_W, (W / 2 - 24) / STATUS_W)
+        s = math.min(1, (H - 36) / (STATUS_H - TITLE_H), across)
     else
         s = math.min(math.clamp(W / 760, 0.72, 1), math.clamp(H / 650, 0.76, 1))
     end
     statusScale.Scale = s
     local statusRight = 18 + STATUS_W * s
+    local smallest
 
     if phone then
         -- Right column: notice on top, help under it, both above the jump button.
@@ -321,6 +356,7 @@ local function updateScale()
         local o = math.min(1, (W - 24) / 440, (H - 16) / 236)
         offerScale.Scale = o
         place(offer, math.min(W / 2, W - JUMP_CLEAR_X - 220 * o), H / 2, 0.5, 0.5)
+        smallest = math.min(SMALLEST_STATUS * s, SMALLEST_SIDE * r, SMALLEST_OFFER * o)
     else
         -- The notice uses the free width right of the status panel so it never
         -- covers the cash line (K0.4.3 centred it over the panel's right edge).
@@ -343,6 +379,14 @@ local function updateScale()
         local o = math.clamp(math.min(W / 920, H / 650), TAP_MIN / 54, 1)
         offerScale.Scale = o
         place(offer, W / 2, H / 2, 0.5, 0.5)
+        smallest = math.min(SMALLEST_STATUS * s, SMALLEST_SIDE * t, SMALLEST_SIDE * helpScale.Scale, SMALLEST_OFFER * o)
+    end
+
+    local report = string.format("[K0 HUD] alan %dx%d %s · panel %.2f · en küçük yazı %.1f px (taban %d)",
+        math.floor(W + 0.5), math.floor(H + 0.5), phone and "telefon" or "geniş ekran", s, smallest, TEXT_MIN)
+    if report ~= lastReport then
+        lastReport = report
+        print(report)
     end
 end
 updateScale()
